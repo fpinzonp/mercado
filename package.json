@@ -10,7 +10,8 @@
     "dev": "vite --host",
     "build": "vite build",
     "preview": "vite preview --host",
-    "test": "vitest run"
+    "test": "vitest run",
+    "postinstall": "node scripts/copiar-tesseract.mjs"
   },
   "keywords": [],
   "author": "",

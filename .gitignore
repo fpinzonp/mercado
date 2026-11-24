@@ -1,3 +1,5 @@
 node_modules
 dist
 .superpowers
+public/tesseract/*
+!public/tesseract/spa.traineddata.gz
