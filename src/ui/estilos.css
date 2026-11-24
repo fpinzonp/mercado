@@ -1,0 +1,192 @@
+/* Mercado — etiquetas de góndola. Lo llamativo son los precios; todo lo demás, sobrio. */
+:root {
+  --fondo: #eef2ef;        /* gris verdoso frío */
+  --superficie: #ffffff;
+  --tinta: #17302a;        /* verde botella */
+  --tinta-suave: #4f655e;
+  --linea: #cfd9d4;
+  --verde: #1e7a4c;        /* acción principal */
+  --etiqueta: #ffd84d;     /* amarillo de góndola: el más barato */
+  --promo: #c8282c;        /* rojo de oferta */
+  --radio: 10px;
+  --num: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--fondo);
+  color: var(--tinta);
+  font: 17px/1.45 -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif;
+  padding-bottom: calc(72px + env(safe-area-inset-bottom));
+}
+main {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: calc(12px + env(safe-area-inset-top)) 16px 24px;
+}
+h1 { font-size: 28px; line-height: 1.15; margin: 8px 0 16px; letter-spacing: -0.01em; }
+h2 { font-size: 19px; margin: 0 0 8px; }
+p { margin: 0 0 12px; }
+a { color: var(--verde); }
+.oculto { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.num, .precio { font-family: var(--num); font-variant-numeric: tabular-nums; }
+.ayuda { color: var(--tinta-suave); font-size: 15px; margin-top: 4px; }
+.error { color: var(--promo); font-size: 15px; margin: 4px 0 0; }
+
+:focus-visible { outline: 3px solid var(--verde); outline-offset: 2px; }
+
+/* Botones */
+.boton, .boton-texto {
+  font: inherit; font-weight: 600; border: 0; cursor: pointer;
+  min-height: 48px; border-radius: var(--radio);
+}
+.boton {
+  display: flex; align-items: center; justify-content: center; width: 100%;
+  background: var(--verde); color: #fff; padding: 12px 16px; margin: 8px 0;
+  text-decoration: none;
+}
+.boton.secundario { background: var(--superficie); color: var(--tinta); box-shadow: inset 0 0 0 1.5px var(--linea); }
+.boton.peligro { background: var(--promo); }
+.boton:disabled { opacity: 0.45; cursor: default; }
+.boton-texto { background: none; color: var(--verde); padding: 8px 4px; min-height: 44px; }
+.boton-texto.peligro { color: var(--promo); }
+
+/* Campos */
+.campo { margin: 0 0 14px; }
+.campo label { display: block; font-weight: 600; margin-bottom: 6px; }
+input, select {
+  font: inherit; color: inherit; width: 100%; min-height: 48px;
+  padding: 10px 12px; border-radius: var(--radio);
+  border: 1.5px solid var(--linea); background: var(--superficie);
+}
+input[aria-invalid='true'] { border-color: var(--promo); }
+.en-linea { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; }
+.en-linea .campo { margin: 0; }
+.en-linea .boton { width: auto; margin: 0; }
+
+.bloque { background: var(--superficie); border-radius: var(--radio); padding: 16px; margin: 0 0 16px; }
+.filas { list-style: none; margin: 0 0 12px; padding: 0; }
+.fila-mercado { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-bottom: 8px; }
+.pasos { padding-left: 22px; margin: 0 0 16px; }
+.pasos li { margin-bottom: 6px; }
+.bienvenida { padding-top: 24px; }
+
+/* Barra inferior */
+.barra {
+  position: fixed; inset: auto 0 0 0; z-index: 5;
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  background: var(--superficie); border-top: 1px solid var(--linea);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.barra a {
+  display: flex; align-items: center; justify-content: center; min-height: 56px;
+  color: var(--tinta-suave); text-decoration: none; font-weight: 600; font-size: 15px;
+}
+.barra a[aria-current] { color: var(--verde); box-shadow: inset 0 3px 0 var(--verde); }
+body[data-vista='bienvenida'] .barra { display: none; }
+
+/* Hoja inferior y avisos */
+.hoja-fondo { position: fixed; inset: 0; z-index: 10; background: rgb(23 48 42 / 0.45); display: flex; align-items: flex-end; }
+.hoja {
+  width: 100%; max-width: 560px; margin: 0 auto; background: var(--superficie);
+  border-radius: 16px 16px 0 0; padding: 20px 16px calc(16px + env(safe-area-inset-bottom));
+  max-height: 85vh; overflow: auto; animation: subir 180ms ease-out;
+}
+@keyframes subir { from { transform: translateY(24px); opacity: 0; } }
+.toast {
+  position: fixed; left: 50%; transform: translateX(-50%); z-index: 20;
+  bottom: calc(80px + env(safe-area-inset-bottom));
+  background: var(--tinta); color: #fff; padding: 10px 16px; border-radius: var(--radio);
+  max-width: calc(100% - 32px);
+}
+@media (prefers-reduced-motion: reduce) { .hoja { animation: none; } }
+
+/* ——— Lista ——— */
+.aviso-respaldo { background: var(--superficie); border-left: 4px solid var(--etiqueta); padding: 12px 16px; border-radius: var(--radio); margin-bottom: 16px; }
+.aviso-respaldo .boton { margin-bottom: 0; }
+
+/* Franja de etiquetas por mercado: lo único llamativo */
+.etiquetas { display: flex; gap: 10px; overflow-x: auto; padding: 4px 2px 10px; margin: 0 -16px; padding-inline: 16px; scroll-snap-type: x proximity; }
+.tag {
+  flex: 0 0 auto; scroll-snap-align: start; position: relative;
+  min-width: 132px; padding: 10px 14px 10px 26px;
+  background: var(--superficie); border-radius: 6px 12px 12px 6px;
+  box-shadow: inset 0 0 0 1.5px var(--linea);
+}
+.tag::before { /* el hueco de la etiqueta */
+  content: ''; position: absolute; left: 10px; top: 50%; width: 8px; height: 8px; margin-top: -4px;
+  border-radius: 50%; background: var(--fondo); box-shadow: inset 0 0 0 1.5px var(--linea);
+}
+.tag .mercado { font-weight: 600; font-size: 15px; }
+.tag .precio { display: block; font-size: 24px; font-weight: 800; line-height: 1.1; }
+.tag .faltan { font-size: 13px; color: var(--tinta-suave); }
+.tag.gana { background: var(--etiqueta); box-shadow: none; }
+.tag.gana::before { box-shadow: none; }
+.combinado { font-size: 15px; color: var(--tinta-suave); margin: 0 0 18px; }
+.combinado strong { color: var(--tinta); font-family: var(--num); }
+
+.items { list-style: none; margin: 0; padding: 0; }
+.item { background: var(--superficie); border-radius: var(--radio); padding: 12px 14px; margin-bottom: 10px; }
+.item-cabeza { display: grid; grid-template-columns: 32px 1fr auto; gap: 10px; align-items: center; }
+.item-cabeza input[type=checkbox] { width: 26px; height: 26px; min-height: 0; margin: 0; accent-color: var(--verde); }
+.item-nombre { font-weight: 700; font-size: 18px; }
+.item-cantidad { color: var(--tinta-suave); font-weight: 500; }
+.item.tachado { background: transparent; box-shadow: inset 0 0 0 1px var(--linea); }
+.item.tachado .item-nombre { text-decoration: line-through; color: var(--tinta-suave); }
+.comprado-en { font-size: 14px; color: var(--tinta-suave); }
+
+.ofertas { list-style: none; padding: 0; margin: 10px 0 0 42px; }
+.oferta {
+  display: grid; grid-template-columns: 1fr auto; gap: 2px 10px;
+  padding: 8px 0; border-top: 1px solid var(--linea); font-size: 15px;
+}
+.oferta button.ver { all: unset; cursor: pointer; display: contents; }
+.oferta .donde { font-weight: 600; }
+.oferta .real { color: var(--tinta-suave); }
+.oferta .costo { font-family: var(--num); font-weight: 800; font-size: 18px; text-align: right; }
+.oferta .detalle { grid-column: 1 / -1; color: var(--tinta-suave); font-size: 14px; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
+.oferta s { color: var(--tinta-suave); }
+.marca { font-size: 13px; font-weight: 700; padding: 1px 8px; border-radius: 999px; }
+.marca.hoy, .marca.mejor { background: var(--etiqueta); color: var(--tinta); }
+.marca.normal { box-shadow: inset 0 0 0 1.5px var(--tinta); }
+.promo { color: var(--promo); font-weight: 700; }
+.tuvo { font-size: 13px; color: var(--tinta-suave); }
+.agregar-precio { margin-left: 42px; }
+
+.vacio { text-align: center; padding: 32px 8px; }
+.acciones-lista { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
+.acciones-lista .boton { margin: 0; }
+
+/* ——— Agregar ——— */
+.resultados { list-style: none; padding: 0; margin: 0 0 16px; }
+.resultados button { all: unset; box-sizing: border-box; cursor: pointer; display: block; width: 100%; padding: 12px 14px; background: var(--superficie); border-radius: var(--radio); margin-bottom: 8px; font-weight: 600; min-height: 48px; }
+.resultados button:focus-visible { outline: 3px solid var(--verde); }
+.opciones { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 0 0 14px; border: 0; padding: 0; }
+.opciones legend { font-weight: 600; margin-bottom: 6px; padding: 0; }
+.opciones label { display: flex; align-items: center; justify-content: center; min-height: 48px; border-radius: var(--radio); background: var(--superficie); box-shadow: inset 0 0 0 1.5px var(--linea); font-weight: 600; cursor: pointer; }
+.opciones input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.opciones input:checked + span { color: var(--verde); }
+.opciones label:has(input:checked) { box-shadow: inset 0 0 0 2.5px var(--verde); }
+.opciones label:has(input:focus-visible) { outline: 3px solid var(--verde); outline-offset: 2px; }
+
+/* ——— Precio ——— */
+.foto-previa { width: 100%; max-height: 260px; object-fit: contain; border-radius: var(--radio); background: var(--superficie); margin-bottom: 12px; }
+.leyendo { color: var(--tinta-suave); margin-bottom: 12px; }
+.palabras { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
+.palabras button { font: inherit; font-size: 15px; min-height: 40px; padding: 6px 12px; border-radius: 999px; border: 0; background: var(--superficie); box-shadow: inset 0 0 0 1.5px var(--linea); color: var(--tinta); }
+.fila-tamano { display: grid; grid-template-columns: 1fr 110px; gap: 8px; }
+.interruptor { display: flex; align-items: center; gap: 10px; min-height: 48px; font-weight: 600; margin-bottom: 8px; }
+.interruptor input { width: 26px; height: 26px; min-height: 0; accent-color: var(--promo); }
+.descuento { border-left: 4px solid var(--promo); padding-left: 12px; margin-bottom: 14px; }
+.fila-desc { display: grid; grid-template-columns: 1fr 90px; gap: 8px; align-items: end; }
+
+/* ——— Comprar aquí ——— */
+.mercados-elegir { display: grid; gap: 10px; }
+.estas-en { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.estas-en h1 { margin-bottom: 8px; }
+details.otros { margin-top: 16px; }
+details.otros summary { font-weight: 700; min-height: 48px; display: flex; align-items: center; cursor: pointer; }
+.nota-otro { font-size: 15px; color: var(--tinta-suave); margin: 6px 0 0 42px; }
