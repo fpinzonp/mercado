@@ -10,7 +10,8 @@ copyFileSync('node_modules/tesseract.js/dist/worker.min.js', join(destino, 'work
 
 const core = 'node_modules/tesseract.js-core';
 for (const f of readdirSync(core)) {
-  if (/^tesseract-core.*-lstm\.(wasm\.js|wasm|js)$/.test(f) || /^tesseract-core-lstm/.test(f)) {
+  // Solo los núcleos LSTM con el wasm embebido (*.wasm.js): es lo que carga tesseract.js con corePath = carpeta.
+  if (/^tesseract-core(-simd|-relaxedsimd)?-lstm\.wasm\.js$/.test(f)) {
     copyFileSync(join(core, f), join(destino, f));
   }
 }
