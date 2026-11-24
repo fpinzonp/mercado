@@ -1,0 +1,31 @@
+{
+  "name": "mercado",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview --host",
+    "test": "vitest run"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "devDependencies": {
+    "fake-indexeddb": "^6.2.8",
+    "jsdom": "^29.1.1",
+    "vite": "^6.4.6",
+    "vite-plugin-pwa": "^2.0.0",
+    "vitest": "^5.1.1"
+  },
+  "dependencies": {
+    "idb": "^8.0.4",
+    "tesseract.js": "^7.0.0"
+  },
+  "private": true
+}
