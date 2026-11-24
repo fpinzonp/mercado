@@ -7,7 +7,7 @@ import { necesitaRecordatorio } from '../datos/respaldo.js';
 import { guardarRespaldo } from './vista-ajustes.js';
 
 /** Fila de una oferta: mercado, nombre real, precio (con descuento), costo, unitario y marcas. */
-export function filaOferta(fila, { item, producto, mercado, soloPorDescuento, hoy, alTocar }) {
+export function filaOferta(fila, { producto, mercado, soloPorDescuento, hoy, alTocar }) {
   const o = fila.oferta;
   const vigente = descuentoVigente(o, hoy);
   const marcas = [];
@@ -42,7 +42,6 @@ export function filaOferta(fila, { item, producto, mercado, soloPorDescuento, ho
   if (alTocar) {
     li.append(h('button', { class: 'ver', type: 'button', 'aria-label': `Ver precio en ${mercado?.nombre}`, onclick: () => alTocar(o) }, contenido));
   } else li.append(...contenido);
-  void item;
   return li;
 }
 
