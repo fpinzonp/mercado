@@ -18,33 +18,59 @@ const deBase64 = (s) => {
 /** Todo menos los ajustes (la clave de Gemini nunca sale del teléfono). */
 export async function exportarRespaldo(repo) {
   const { db } = repo;
-  const fotos = (await db.getAll('fotos')).map((f) => ({ id: f.id, tipo: f.tipo, base64: aBase64(f.datos) }));
+  const ofertas = await db.getAll('ofertas');
+  const usadas = new Set(ofertas.map((o) => o.fotoId).filter(Boolean));
+  const fotos = (await db.getAll('fotos'))
+    .filter((f) => usadas.has(f.id))
+    .map((f) => ({ id: f.id, tipo: f.tipo, base64: aBase64(f.datos) }));
   return {
     version: 1,
     exportado: hoyLocal(),
     mercados: await db.getAll('mercados'),
     productos: await db.getAll('productos'),
-    ofertas: await db.getAll('ofertas'),
+    ofertas,
     lista: await db.getAll('lista'),
     fotos,
   };
 }
 
-export async function importarRespaldo(repo, datos) {
+const NO_ES_RESPALDO = 'Este archivo no es un respaldo de Mercado';
+const tieneId = (r) => r && typeof r === 'object' && typeof r.id === 'string' && r.id;
+
+/** Valida y prepara todo ANTES de tocar la base: un archivo dañado nunca borra datos. */
+function prepararRespaldo(datos) {
   const listas = ['mercados', 'productos', 'ofertas', 'lista', 'fotos'];
-  if (!datos || datos.version !== 1 || !listas.every((k) => Array.isArray(datos[k] ?? []))) {
-    throw new Error('Este archivo no es un respaldo de Mercado');
-  }
-  const { db } = repo;
-  const tx = db.transaction(listas, 'readwrite');
-  for (const a of listas) await tx.objectStore(a).clear();
+  if (!datos || datos.version !== 1 || !listas.every((k) => Array.isArray(datos[k] ?? []))) throw new Error(NO_ES_RESPALDO);
+  const r = {};
   for (const a of ['mercados', 'productos', 'ofertas', 'lista']) {
-    for (const r of datos[a] ?? []) await tx.objectStore(a).put(r);
+    r[a] = datos[a] ?? [];
+    if (!r[a].every(tieneId)) throw new Error(NO_ES_RESPALDO);
   }
-  for (const f of datos.fotos ?? []) {
-    await tx.objectStore('fotos').put({ id: f.id, tipo: f.tipo || 'image/jpeg', datos: deBase64(f.base64) });
+  if (!r.ofertas.every((o) => o.productoId && o.mercadoId)) throw new Error(NO_ES_RESPALDO);
+  if (!r.lista.every((i) => i.productoId)) throw new Error(NO_ES_RESPALDO);
+  try {
+    r.fotos = (datos.fotos ?? []).map((f) => {
+      if (!tieneId(f) || typeof f.base64 !== 'string') throw new Error();
+      return { id: f.id, tipo: f.tipo || 'image/jpeg', datos: deBase64(f.base64) };
+    });
+  } catch {
+    throw new Error(NO_ES_RESPALDO);
   }
-  await tx.done;
+  return r;
+}
+
+export async function importarRespaldo(repo, datos) {
+  const listo = prepararRespaldo(datos);
+  const almacenes = ['mercados', 'productos', 'ofertas', 'lista', 'fotos'];
+  const tx = repo.db.transaction(almacenes, 'readwrite');
+  try {
+    for (const a of almacenes) await tx.objectStore(a).clear();
+    for (const a of almacenes) for (const r of listo[a]) await tx.objectStore(a).put(r);
+    await tx.done;
+  } catch (e) {
+    try { tx.abort(); } catch { /* ya terminó */ }
+    throw new Error(NO_ES_RESPALDO, { cause: e });
+  }
   await repo.guardarAjuste('ultimoRespaldo', hoyLocal());
 }
 

@@ -38,8 +38,9 @@ export function parseRespuestaGemini(cuerpo) {
   return { nombre: datos.nombre.trim(), tamano: datos.tamano ?? null, unidad: datos.unidad ?? null };
 }
 
-export async function leerEtiquetaGemini(blob, { clave, modelo = 'gemini-flash-latest', fetchImpl = globalThis.fetch } = {}) {
+export async function leerEtiquetaGemini(blob, { clave, modelo = 'gemini-flash-latest', fetchImpl = globalThis.fetch, espera = 8000 } = {}) {
   if (!clave) throw new ErrorIA('sin_clave');
+  if (globalThis.navigator?.onLine === false) throw new ErrorIA('sin_red');
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelo)}:generateContent?key=${encodeURIComponent(clave)}`;
   const body = JSON.stringify({
     contents: [{
@@ -51,11 +52,16 @@ export async function leerEtiquetaGemini(blob, { clave, modelo = 'gemini-flash-l
     generationConfig: { responseMimeType: 'application/json', temperature: 0 },
   });
 
+  // Con mala señal en el mercado, no esperar más de unos segundos: mejor pasar a la lectura del teléfono.
+  const corte = new AbortController();
+  const reloj = setTimeout(() => corte.abort(), espera);
   let res;
   try {
-    res = await fetchImpl(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+    res = await fetchImpl(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal: corte.signal });
   } catch {
     throw new ErrorIA('sin_red');
+  } finally {
+    clearTimeout(reloj);
   }
   if (res.status === 429) throw new ErrorIA('limite');
   if (res.status === 400 || res.status === 401 || res.status === 403) throw new ErrorIA('clave_invalida');

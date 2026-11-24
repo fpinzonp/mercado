@@ -55,7 +55,9 @@ export async function pintarAgregar(raiz, ctx) {
 
     const form = h('form', { class: 'cantidad', novalidate: true },
       h('h2', {}, producto ? producto.nombre : nombreNuevo),
-      enLista ? h('p', { class: 'ayuda' }, `Ya está en la lista (${formatoCantidad(enLista.cantidad, producto.tipoUnidad)}); se suma.`) : null,
+      enLista ? h('p', { class: 'ayuda' }, enLista.tachado
+        ? `Estaba tachado en la lista; se vuelve a poner con esta cantidad.`
+        : `Ya está en la lista (${formatoCantidad(enLista.cantidad, producto.tipoUnidad)}); se suma.`) : null,
       selectorTipo, tipoError,
       cantidad.nodo,
       h('button', { class: 'boton', type: 'submit' }, 'Agregar a la lista'),
@@ -71,8 +73,10 @@ export async function pintarAgregar(raiz, ctx) {
     };
     cantidad.input.addEventListener('blur', () => { if (cantidad.input.value) validar(); });
 
+    let guardando = false;
     form.addEventListener('submit', async (ev) => {
       ev.preventDefault();
+      if (guardando) return;
       tipo = form.querySelector('input[name=tipo]:checked')?.value ?? tipo;
       if (!tipo) {
         tipoError.textContent = 'Elige si se mide por peso, líquido o unidades.';
@@ -81,8 +85,13 @@ export async function pintarAgregar(raiz, ctx) {
       }
       const n = validar();
       if (!n) { cantidad.input.focus(); return; }
+      guardando = true;
       const p = producto ?? await repo.guardarProducto({ nombre: nombreNuevo, tipoUnidad: tipo });
-      if (enLista) await repo.guardarItem({ ...enLista, cantidad: enLista.cantidad + n });
+      if (enLista?.tachado) {
+        const { compradoEn, ...resto } = enLista;
+        void compradoEn;
+        await repo.guardarItem({ ...resto, tachado: false, cantidad: n });
+      } else if (enLista) await repo.guardarItem({ ...enLista, cantidad: enLista.cantidad + n });
       else await repo.guardarItem({ productoId: p.id, cantidad: n });
       ctx.ir('#/lista');
     });

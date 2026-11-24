@@ -4,7 +4,15 @@ import { hoyLocal } from '../logica/fechas.js';
 
 const VERSION = 1;
 const DEFAULTS = { geminiModelo: 'gemini-flash-latest' };
-const nuevoId = () => crypto.randomUUID();
+// randomUUID solo existe en contexto seguro (https); en http de la red local se arma a mano.
+const nuevoId = () => {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const x = [...b].map((v) => v.toString(16).padStart(2, '0')).join('');
+  return `${x.slice(0, 8)}-${x.slice(8, 12)}-${x.slice(12, 16)}-${x.slice(16, 20)}-${x.slice(20)}`;
+};
 
 /**
  * Abre la base local y devuelve el repositorio.
@@ -57,10 +65,13 @@ export async function abrirDB(nombre = 'mercado') {
       return r;
     },
     async borrarMercado(id) {
-      const tx = db.transaction(['mercados', 'ofertas'], 'readwrite');
+      const tx = db.transaction(['mercados', 'ofertas', 'fotos'], 'readwrite');
       await tx.objectStore('mercados').delete(id);
       const idx = tx.objectStore('ofertas').index('porMercado');
-      for (const k of await idx.getAllKeys(id)) await tx.objectStore('ofertas').delete(k);
+      for (const o of await idx.getAll(id)) {
+        await tx.objectStore('ofertas').delete(o.id);
+        if (o.fotoId) await tx.objectStore('fotos').delete(o.fotoId);
+      }
       await tx.done;
       await marcarCambio();
     },
@@ -90,6 +101,7 @@ export async function abrirDB(nombre = 'mercado') {
       const r = fusionarOferta(anterior, parcial, hoy);
       r.id = anterior?.id ?? nuevoId();
       await db.put('ofertas', r);
+      if (anterior?.fotoId && anterior.fotoId !== r.fotoId) await db.delete('fotos', anterior.fotoId);
       await marcarCambio();
       return r;
     },

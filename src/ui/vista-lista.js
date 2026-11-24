@@ -25,7 +25,11 @@ export function filaOferta(fila, { producto, mercado, soloPorDescuento, hoy, alT
     h('span', { class: 'num' }, formatoUnitario(vigente ? o.precioDescuento : o.precioNormal, o.tamano, producto.tipoUnidad)),
   ];
   if (vigente) {
-    const partes = [o.detalleDescuento, `hasta ${formatoDiaMes(o.descuentoHasta || o.actualizado)}`].filter(Boolean);
+    const partes = [
+      o.detalleDescuento,
+      fila.costoNormal > fila.costo ? `ahorras ${formatoCOP(fila.costoNormal - fila.costo)}` : null,
+      `hasta ${formatoDiaMes(o.descuentoHasta || o.actualizado)}`,
+    ].filter(Boolean);
     detalle.push(h('span', { class: 'promo' }, `🏷 ${partes.join(' ')}`));
   } else if (o.precioDescuento > 0) {
     detalle.push(h('span', { class: 'tuvo' }, `tuvo descuento: ${formatoCOP(o.precioDescuento)} (${formatoDiaMes(o.descuentoHasta || o.actualizado)})`));

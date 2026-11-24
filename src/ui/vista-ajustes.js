@@ -4,24 +4,32 @@ import { hoyLocal } from '../logica/fechas.js';
 
 /** Comparte o descarga el respaldo y marca ultimoRespaldo. Lo usa también el aviso de la Lista. */
 export async function guardarRespaldo(repo) {
-  const datos = await exportarRespaldo(repo);
-  const nombre = `mercado-respaldo-${hoyLocal()}.json`;
-  const archivo = new File([JSON.stringify(datos)], nombre, { type: 'application/json' });
-  if (navigator.canShare?.({ files: [archivo] })) {
-    try {
-      await navigator.share({ files: [archivo], title: 'Respaldo de Mercado' });
-    } catch (e) {
-      if (e?.name === 'AbortError') return false;
-      throw e;
+  try {
+    const datos = await exportarRespaldo(repo);
+    const nombre = `mercado-respaldo-${hoyLocal()}.json`;
+    const archivo = new File([JSON.stringify(datos)], nombre, { type: 'application/json' });
+    let compartido = false;
+    if (navigator.canShare?.({ files: [archivo] })) {
+      try {
+        await navigator.share({ files: [archivo], title: 'Respaldo de Mercado' });
+        compartido = true;
+      } catch (e) {
+        if (e?.name === 'AbortError') return false;
+        // p. ej. NotAllowedError si armar el archivo tardó demasiado: se descarga en su lugar
+      }
     }
-  } else {
-    const a = h('a', { href: URL.createObjectURL(archivo), download: nombre });
-    document.body.append(a);
-    a.click();
-    a.remove();
+    if (!compartido) {
+      const a = h('a', { href: URL.createObjectURL(archivo), download: nombre });
+      document.body.append(a);
+      a.click();
+      a.remove();
+    }
+    await repo.guardarAjuste('ultimoRespaldo', hoyLocal());
+    return true;
+  } catch {
+    aviso('No se pudo guardar el respaldo. Inténtalo otra vez desde Ajustes.');
+    return false;
   }
-  await repo.guardarAjuste('ultimoRespaldo', hoyLocal());
-  return true;
 }
 
 export async function pintarAjustes(raiz, ctx) {

@@ -91,7 +91,9 @@ export async function pintarPrecio(raiz, ctx, params = []) {
     if (!v) msg = 'Escribe el precio con descuento o el porcentaje.';
     else if (normal && v >= normal) msg = 'El precio con descuento debe ser menor que el normal.';
     precioDesc.mostrarError(msg);
-    return { ok: !msg, valor: v };
+    const fechaMala = hasta.input.value && hasta.input.value < hoy;
+    hasta.mostrarError(fechaMala ? 'La fecha ya pasó; elige hoy o una fecha futura, o déjala vacía.' : '');
+    return { ok: !msg && !fechaMala, valor: v };
   };
   nombre.input.addEventListener('blur', () => { if (nombre.input.value) validarNombre(); });
   tamano.input.addEventListener('blur', () => { if (tamano.input.value) validarTamano(); });
@@ -114,10 +116,17 @@ export async function pintarPrecio(raiz, ctx, params = []) {
   selMercado.addEventListener('change', prellenar);
   prellenar();
 
+  // Lo que el usuario escriba mientras se lee la foto no se pisa con la lectura.
+  const editado = { nombre: false, tamano: false };
+  nombre.input.addEventListener('input', () => { editado.nombre = true; });
+  tamano.input.addEventListener('input', () => { editado.tamano = true; });
+
   inputFoto.addEventListener('change', async () => {
     const file = inputFoto.files?.[0];
     if (!file) return;
     palabras.replaceChildren();
+    editado.nombre = false;
+    editado.tamano = false;
     estadoLectura.textContent = 'Leyendo etiqueta…';
     try {
       foto = await reducirImagen(file);
@@ -129,17 +138,22 @@ export async function pintarPrecio(raiz, ctx, params = []) {
       const r = await leerProducto(foto, { clave, modelo });
       estadoLectura.textContent = r.aviso ?? (r.fuente === 'gemini' ? 'Revisa lo que leí y corrige si hace falta.' : '');
       const lectura = normalizarLectura(r, producto.tipoUnidad);
-      if (r.fuente === 'gemini' && lectura.nombre) nombre.input.value = lectura.nombre;
-      if (lectura.tamano) tamano.input.value = String(lectura.tamano);
-      else if (r.fuente === 'gemini') tamano.input.value = '';
+      if (r.fuente === 'gemini' && lectura.nombre && !editado.nombre) nombre.input.value = lectura.nombre;
+      if (!editado.tamano) {
+        if (lectura.tamano) tamano.input.value = String(lectura.tamano);
+        else if (r.fuente === 'gemini') tamano.input.value = '';
+      }
       if (r.fuente === 'ocr') {
         if (!r.aviso) estadoLectura.textContent = 'Toca las palabras del nombre en orden.';
-        nombre.input.value = '';
+        let primera = !editado.nombre;
         for (const p of r.palabras ?? []) {
           palabras.append(h('button', {
             type: 'button',
             onclick: (ev) => {
-              nombre.input.value = [nombre.input.value.trim(), p].filter(Boolean).join(' ');
+              // La primera palabra reemplaza el nombre guardado; las siguientes se suman.
+              const base = primera ? '' : nombre.input.value.trim();
+              primera = false;
+              nombre.input.value = [base, p].filter(Boolean).join(' ');
               nombre.mostrarError('');
               ev.currentTarget.disabled = true;
             },
@@ -164,8 +178,10 @@ export async function pintarPrecio(raiz, ctx, params = []) {
     h('button', { class: 'boton secundario', type: 'button', onclick: () => ctx.ir(volverA) }, 'Cancelar'),
   );
 
+  let guardando = false;
   form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
+    if (guardando) return;
     const vNombre = validarNombre();
     const vTamano = validarTamano();
     const vPrecio = validarPrecio();
@@ -174,6 +190,7 @@ export async function pintarPrecio(raiz, ctx, params = []) {
       form.querySelector('[aria-invalid=true]')?.focus();
       return;
     }
+    guardando = true;
     const anterior = ofertas.find((x) => x.mercadoId === selMercado.value);
     const fotoId = foto ? await repo.guardarFoto(foto) : anterior?.fotoId;
     await repo.guardarOferta({
