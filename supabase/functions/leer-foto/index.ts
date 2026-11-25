@@ -65,17 +65,29 @@ Deno.serve(async (req) => {
     return json({ error: 'pedido_invalido' }, 400);
   }
   const mimeType = /^image\/(jpeg|png|webp|heic|heif)$/.test(pedido.mimeType ?? '') ? pedido.mimeType : 'image/jpeg';
-  const modelo = Deno.env.get('GEMINI_MODEL') ?? 'gemini-flash-latest';
-
-  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelo)}:generateContent`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': clave },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType, data: pedido.data } }] }],
-      generationConfig: { responseMimeType: 'application/json', temperature: 0 },
-    }),
+  const cuerpo = JSON.stringify({
+    contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType, data: pedido.data } }] }],
+    generationConfig: { responseMimeType: 'application/json', temperature: 0 },
   });
-  if (r.status === 429) return json({ error: 'limite' }, 429);
-  if (!r.ok) return json({ error: 'gemini', status: r.status }, 502);
-  return new Response(await r.text(), { status: 200, headers: { ...h, 'Content-Type': 'application/json' } });
+
+  // Gemini gratis a veces responde 503 (sobrecargado) o 500: se reintenta y, si sigue, se prueba otro modelo.
+  // GEMINI_MODELS (opcional) = lista separada por comas, en orden de preferencia.
+  const modelos = (Deno.env.get('GEMINI_MODELS') ?? Deno.env.get('GEMINI_MODEL') ?? 'gemini-flash-latest,gemini-flash-lite-latest')
+    .split(',').map((m) => m.trim()).filter(Boolean);
+  const intentos = modelos.flatMap((m, i) => (i === 0 ? [m, m] : [m]));
+  let ultimo = 0;
+  for (const [i, modelo] of intentos.entries()) {
+    if (i > 0) await new Promise((r) => setTimeout(r, 700));
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelo)}:generateContent`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': clave },
+      body: cuerpo,
+    });
+    if (r.ok) return new Response(await r.text(), { status: 200, headers: { ...h, 'Content-Type': 'application/json' } });
+    ultimo = r.status;
+    await r.body?.cancel();
+    if (r.status === 429) return json({ error: 'limite' }, 429);
+    if (r.status !== 503 && r.status !== 500 && r.status !== 404) break; // clave mala u otro error: no sirve reintentar
+  }
+  return json({ error: 'gemini', status: ultimo }, 502);
 });

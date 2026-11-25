@@ -11,6 +11,9 @@ const AVISOS = {
   respuesta_invalida: 'La IA no entendió la foto; usé la lectura del teléfono.',
 };
 const avisoDe = (e) => {
+  if (e?.codigo === 'respuesta_invalida' && / 50[03]$/.test(e.message)) {
+    return 'Gemini está saturado en este momento; usé la lectura del teléfono. Inténtalo de nuevo en un rato.';
+  }
   if (e?.codigo === 'respuesta_invalida' && /\d{3}/.test(e.message)) return `La lectura con IA falló (${e.message}); usé la lectura del teléfono.`;
   return AVISOS[e?.codigo];
 };

@@ -54,7 +54,7 @@ export async function leerTagGemini(blob, opciones = {}) {
   return jsonDeRespuesta(await pedir(blob, 'tag', opciones));
 }
 
-async function pedir(blob, tipo, { token, fetchImpl = globalThis.fetch, espera = 12000 } = {}) {
+async function pedir(blob, tipo, { token, fetchImpl = globalThis.fetch, espera = 20000 } = {}) {
   if (!token) throw new ErrorIA('sin_sesion');
   if (globalThis.navigator?.onLine === false) throw new ErrorIA('sin_red');
   const body = JSON.stringify({ tipo, mimeType: blob.type || 'image/jpeg', data: await aBase64(blob) });
