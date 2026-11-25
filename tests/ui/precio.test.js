@@ -261,3 +261,19 @@ test('si el tag no se pudo leer lo dice', async () => {
   await fotoTag(raiz);
   await vi.waitFor(() => expect(raiz.textContent).toContain('No pude leer el tag'));
 });
+
+test('abrir el precio de un mercado lo deja elegido y muestra el precio que se va a reemplazar', async () => {
+  const repo = await abrirDB(`ui-precio-${n++}`);
+  await repo.guardarMercado({ nombre: 'D1', orden: 0 });
+  const ara = await repo.guardarMercado({ nombre: 'Ara', orden: 1 });
+  const arroz = await repo.guardarProducto({ nombre: 'Arroz', tipoUnidad: 'g' });
+  await repo.guardarOferta({ productoId: arroz.id, mercadoId: ara.id, nombreReal: 'Arroz Roa', tamano: 500, precioNormal: 2400 }, hoy);
+  const raiz = document.createElement('div');
+  await pintarPrecio(raiz, { repo, hoy: () => hoy, ir: vi.fn() }, [arroz.id, ara.id]);
+  expect(raiz.querySelector('#mercado').value).toBe(ara.id);
+  expect(raiz.querySelector('#precio').value).toBe('2.400');
+  expect(raiz.textContent).toContain('Último precio en Ara: $2.400');
+  raiz.querySelector('#mercado').value = raiz.querySelector('#mercado option').value;
+  raiz.querySelector('#mercado').dispatchEvent(new Event('change'));
+  expect(raiz.textContent).toContain('Todavía no hay precio en D1');
+});

@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { parsePrecio, parseCantidad, convertir, formatoCOP, formatoCantidad, formatoUnitario, tipoDeUnidad, parseTamano } from '../../src/logica/unidades.js';
+import { parsePrecio, convertir, formatoCOP, formatoCantidad, formatoUnitario, tipoDeUnidad, parseTamano } from '../../src/logica/unidades.js';
 
 test('parsePrecio entiende precios a la colombiana', () => {
   expect(parsePrecio('4.500')).toBe(4500);
@@ -12,14 +12,14 @@ test('parsePrecio entiende precios a la colombiana', () => {
   expect(parsePrecio('abc')).toBeNull();
 });
 
-test('parseCantidad convierte kg y L', () => {
-  expect(parseCantidad('2 kg', 'g')).toBe(2000);
-  expect(parseCantidad('1,5 L', 'ml')).toBe(1500);
-  expect(parseCantidad('500', 'g')).toBe(500);
-  expect(parseCantidad('30', 'unidad')).toBe(30);
-  expect(parseCantidad('1 L', 'g')).toBeNull();
-  expect(parseCantidad('0', 'g')).toBeNull();
-  expect(parseCantidad('', 'g')).toBeNull();
+test('parseTamano convierte kg y L', () => {
+  expect(parseTamano('2 kg', 'g')?.tamano).toBe(2000);
+  expect(parseTamano('1,5 L', 'ml')?.tamano).toBe(1500);
+  expect(parseTamano('500', 'g')?.tamano).toBe(500);
+  expect(parseTamano('30', 'unidad')?.tamano).toBe(30);
+  expect(parseTamano('1 L', 'g')).toBeNull();
+  expect(parseTamano('0', 'g')).toBeNull();
+  expect(parseTamano('', 'g')).toBeNull();
 });
 
 test('convertir rechaza unidades incompatibles', () => {

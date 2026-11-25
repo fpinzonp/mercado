@@ -59,16 +59,6 @@ export function parseTamano(texto, tipo) {
   return { tamano: convertir(n, m[2], t), tipo: t };
 }
 
-/** "2 kg", "1,5 L", "500" → cantidad en unidad interna (> 0), o null. */
-export function parseCantidad(texto, tipoUnidad) {
-  const m = String(texto ?? '').trim().match(/^([\d.,]+)\s*([a-zA-Z]*)[.]?$/);
-  if (!m) return null;
-  const n = parseNumero(m[1]);
-  if (n === null || n <= 0) return null;
-  if (!m[2]) return n;
-  return convertir(n, m[2], tipoUnidad);
-}
-
 const conMiles = (n) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 
 export function formatoCOP(n) {

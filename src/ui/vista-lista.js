@@ -46,7 +46,8 @@ export function filaOferta(fila, { producto, mercado, soloPorDescuento, hoy, alT
   return li;
 }
 
-export async function verFoto(repo, oferta, mercado) {
+/** Foto y fecha del precio, con el botón para actualizarlo en ese mercado. */
+export async function verFoto(repo, oferta, mercado, ctx) {
   const blob = await repo.leerFoto(oferta.fotoId);
   const contenido = h('div', {},
     blob ? h('img', { class: 'foto-previa', src: URL.createObjectURL(blob), alt: oferta.nombreReal || 'Foto del producto' })
@@ -54,7 +55,13 @@ export async function verFoto(repo, oferta, mercado) {
     h('p', {}, `Actualizado el ${formatoDiaMes(oferta.actualizado)}.`),
   );
   const cerrar = abrirHoja(`${oferta.nombreReal || 'Producto'} en ${mercado?.nombre ?? ''}`, contenido);
-  contenido.append(h('button', { class: 'boton secundario', onclick: () => cerrar() }, 'Cerrar'));
+  contenido.append(
+    ctx ? h('button', {
+      class: 'boton',
+      onclick: () => { cerrar(); ctx.ir(`#/precio/${oferta.productoId}/${oferta.mercadoId}`); },
+    }, `Actualizar precio en ${mercado?.nombre ?? 'este mercado'}`) : null,
+    h('button', { class: 'boton secundario', onclick: () => cerrar() }, 'Cerrar'),
+  );
 }
 
 export async function pintarLista(raiz, ctx) {
@@ -134,8 +141,8 @@ export async function pintarLista(raiz, ctx) {
         }, 'Quitar'),
       ),
       comprado ? h('p', { class: 'comprado-en' }, `Comprado en ${comprado}`) : null,
-      item.tachado ? null : ofertasDe(comp, { producto, e, hoy, repo }),
-      item.tachado ? null : h('button', { class: 'boton-texto agregar-precio', onclick: () => ctx.ir(`#/precio/${producto.id}`) }, '+ Agregar precio'),
+      item.tachado ? null : ofertasDe(comp, { producto, e, hoy, repo, ctx }),
+      item.tachado ? null : h('button', { class: 'boton-texto agregar-precio', onclick: () => ctx.ir(`#/precio/${producto.id}`) }, comparaciones.get(item.id).filas.length ? 'Actualizar precio' : '+ Agregar precio'),
     );
   })));
 
@@ -149,11 +156,11 @@ export async function pintarLista(raiz, ctx) {
  * A la vista solo lo que importa en el mercado: el más barato (y el más barato sin descuento si gana por promo).
  * El resto de precios queda plegado.
  */
-function ofertasDe(comp, { producto, e, hoy, repo }) {
+function ofertasDe(comp, { producto, e, hoy, repo, ctx }) {
   if (!comp.filas.length) return null;
   const fila = (f) => filaOferta(f, {
     producto, mercado: e.mercadosPorId.get(f.oferta.mercadoId), soloPorDescuento: comp.soloPorDescuento, hoy,
-    alTocar: (o) => verFoto(repo, o, e.mercadosPorId.get(o.mercadoId)),
+    alTocar: (o) => verFoto(repo, o, e.mercadosPorId.get(o.mercadoId), ctx),
   });
   const visibles = comp.filas.filter((f, i) => i === 0 || f.esMasBaratoHoy || (comp.soloPorDescuento && f.esMasBaratoNormal));
   const resto = comp.filas.filter((f) => !visibles.includes(f));

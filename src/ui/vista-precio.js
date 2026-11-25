@@ -5,6 +5,7 @@ import { reducirImagen as reducirReal } from '../img/reducir.js';
 import { normalizarLectura } from '../logica/tamano.js';
 import { parsePrecio, parseTamano, tipoDeUnidad, formatoCOP } from '../logica/unidades.js';
 import { descuentoVigente } from '../logica/comparar.js';
+import { formatoDiaMes } from '../logica/fechas.js';
 
 const sinSigno = (n) => formatoCOP(n).slice(1);
 const NOMBRE_TIPO = { g: 'gramos', ml: 'mililitros', unidad: 'unidades' };
@@ -30,7 +31,8 @@ export async function pintarPrecio(raiz, ctx, params = []) {
   let foto = null;
 
   // Mercado
-  const mercadoInicial = [e.ajustes.mercadoActivo, e.ajustes.ultimoMercadoPrecio, e.mercados[0]?.id]
+  // #/precio/<producto>/<mercado>: abre directo en ese mercado (para actualizar un precio).
+  const mercadoInicial = [params[1], e.ajustes.mercadoActivo, e.ajustes.ultimoMercadoPrecio, e.mercados[0]?.id]
     .find((id) => id && e.mercadosPorId.has(id));
   const selMercado = h('select', { id: 'mercado' },
     e.mercados.map((m) => h('option', { value: m.id, selected: m.id === mercadoInicial }, m.nombre)));
@@ -147,7 +149,14 @@ export async function pintarPrecio(raiz, ctx, params = []) {
   precio.input.addEventListener('blur', () => { if (precio.input.value) validarPrecio(); });
 
   // Prellenar con lo guardado para el mercado elegido
+  // Qué precio hay guardado en el mercado elegido: lo que se guarde lo reemplaza.
+  const ultimo = h('p', { class: 'ayuda ultimo-precio', role: 'status' });
   const prellenar = () => {
+    const actual = ofertas.find((x) => x.mercadoId === selMercado.value);
+    const nombreMercado = e.mercadosPorId.get(selMercado.value)?.nombre ?? 'este mercado';
+    ultimo.textContent = actual
+      ? `Último precio en ${nombreMercado}: ${formatoCOP(actual.precioNormal)} (${formatoDiaMes(actual.actualizado)}). Lo que guardes lo reemplaza.`
+      : `Todavía no hay precio en ${nombreMercado}.`;
     const o = ofertas.find((x) => x.mercadoId === selMercado.value);
     nombre.input.value = o?.nombreReal ?? '';
     tamano.input.value = o?.tamano ? String(o.tamano) : '';
@@ -271,6 +280,7 @@ export async function pintarPrecio(raiz, ctx, params = []) {
   const form = h('form', { novalidate: true },
     h('h1', {}, `Precio de ${producto.nombre}`),
     h('div', { class: 'campo' }, h('label', { for: 'mercado' }, 'Mercado'), selMercado),
+    ultimo,
     h('div', { class: 'fotos' },
       h('label', { class: 'boton', for: 'foto' }, 'Foto del producto'),
       h('label', { class: 'boton secundario', for: 'foto-tag' }, 'Foto del precio'),

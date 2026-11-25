@@ -204,3 +204,17 @@ test('cada producto muestra a la vista solo el precio que importa; los demás se
   expect(mas.querySelector('summary').textContent).toBe('Ver 1 precio más');
   expect(mas.textContent).toContain('Éxito');
 });
+
+test('tocar un precio de la lista deja actualizarlo en ese mercado', async () => {
+  const { ctx, d1, arroz } = await escenario();
+  const raiz = document.createElement('div');
+  document.body.append(raiz);
+  await pintarLista(raiz, ctx);
+  expect([...raiz.querySelectorAll('button')].some((b) => b.textContent === 'Actualizar precio')).toBe(true);
+  filaDe(raiz, 'D1').querySelector('button.ver').click();
+  const hoja = await vi.waitFor(() => { const x = document.querySelector('.hoja'); expect(x).toBeTruthy(); return x; });
+  [...hoja.querySelectorAll('button')].find((b) => b.textContent === 'Actualizar precio en D1').click();
+  expect(ctx.ir).toHaveBeenCalledWith(`#/precio/${arroz.id}/${d1.id}`);
+  document.querySelector('.hoja-fondo')?.remove();
+  raiz.remove();
+});

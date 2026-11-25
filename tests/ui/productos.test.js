@@ -74,3 +74,9 @@ test('buscar filtra los productos sin tildes ni mayúsculas', async () => {
   expect(filaDe(raiz, 'Café').hidden).toBe(false);
   expect(filaDe(raiz, 'Arroz').hidden).toBe(true);
 });
+
+test('con precio guardado el botón dice Actualizar precio', async () => {
+  const { raiz } = await escenario();
+  expect(boton(filaDe(raiz, 'Arroz'), 'Actualizar precio')).toBeTruthy();
+  expect(boton(filaDe(raiz, 'Café'), 'Agregar precio')).toBeTruthy();
+});

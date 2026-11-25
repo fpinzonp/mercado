@@ -1,6 +1,7 @@
 import { h, limpiar, campo } from './dom.js';
+import { normalizarNombre } from '../logica/nombres.js';
 
-export const normalizar = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim().replace(/\s+/g, ' ');
+export const normalizar = normalizarNombre;
 
 /**
  * Pone el producto en la lista: si estaba tachado lo destacha; si ya está, no lo duplica.

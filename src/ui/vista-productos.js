@@ -51,7 +51,7 @@ export async function pintarProductos(raiz, ctx) {
       ),
       h('p', { class: 'nota-otro' }, resumen),
       h('div', { class: 'acciones-producto' },
-        h('button', { class: 'boton-texto', type: 'button', onclick: () => ctx.ir(`#/precio/${p.id}`) }, 'Agregar precio'),
+        h('button', { class: 'boton-texto', type: 'button', onclick: () => ctx.ir(`#/precio/${p.id}`) }, ofertas.length ? 'Actualizar precio' : 'Agregar precio'),
         enLista
           ? h('button', { class: 'boton-texto peligro', type: 'button', onclick: una(async () => { const copia = { ...item }; await repo.borrarItem(item.id); aviso(`Quitaste ${p.nombre} de la lista`, { accion: 'Deshacer', alTocar: async () => { await repo.guardarItem(copia); repintar(); } }); }) }, 'Quitar de la lista')
           : h('button', { class: 'boton-texto', type: 'button', onclick: una(() => ponerEnLista(repo, p.id)) }, 'Agregar a la lista'),
