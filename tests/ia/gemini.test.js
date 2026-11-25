@@ -57,3 +57,8 @@ test.each([
 test('parseRespuestaGemini sin candidatos', () => {
   expect(() => parseRespuestaGemini({})).toThrow(ErrorIA);
 });
+
+test('si Gemini falla en el servidor, el error dice el código', async () => {
+  const p = leerEtiquetaGemini(blob(), { token: 't', fetchImpl: async () => ({ ok: false, status: 502, json: async () => ({ error: 'gemini', status: 403 }) }) });
+  await expect(p).rejects.toMatchObject({ codigo: 'respuesta_invalida', message: expect.stringContaining('403') });
+});

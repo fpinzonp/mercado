@@ -7,7 +7,12 @@ import { hoyLocal } from '../logica/fechas.js';
 const AVISOS = {
   limite: 'Se acabó el cupo gratis de la IA por ahora (límite de uso); usé la lectura del teléfono.',
   no_configurado: 'La lectura con IA todavía no está activada en el servidor; usé la lectura del teléfono.',
+  sin_sesion: 'La lectura con IA no aceptó tu sesión (revisa en Supabase la función leer-foto: apaga «Verify JWT»); usé la lectura del teléfono.',
   respuesta_invalida: 'La IA no entendió la foto; usé la lectura del teléfono.',
+};
+const avisoDe = (e) => {
+  if (e?.codigo === 'respuesta_invalida' && /\d{3}/.test(e.message)) return `La lectura con IA falló (${e.message}); usé la lectura del teléfono.`;
+  return AVISOS[e?.codigo];
 };
 
 /**
@@ -23,7 +28,7 @@ export async function leerProducto(blob, { token } = {}, deps = {}) {
     const r = await gemini(blob, { token });
     return { fuente: 'gemini', ...r };
   } catch (e) {
-    aviso = AVISOS[e?.codigo];
+    aviso = avisoDe(e);
   }
 
   try {
@@ -49,7 +54,7 @@ export async function leerTag(blob, { token, hoy = hoyLocal() } = {}, deps = {})
   try {
     return { fuente: 'gemini', ...normalizarTag(await gemini(blob, { token }), hoy) };
   } catch (e) {
-    aviso = AVISOS[e?.codigo];
+    aviso = avisoDe(e);
   }
   try {
     const { texto } = await ocr(blob);

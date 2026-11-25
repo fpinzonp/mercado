@@ -78,7 +78,10 @@ async function pedir(blob, tipo, { token, fetchImpl = globalThis.fetch, espera =
   if (res.status === 429) throw new ErrorIA('limite');
   if (res.status === 401 || res.status === 403) throw new ErrorIA('sin_sesion');
   if (res.status === 503 || res.status === 404) throw new ErrorIA('no_configurado');
-  if (!res.ok) throw new ErrorIA('respuesta_invalida', `HTTP ${res.status}`);
+  if (!res.ok) {
+    const detalle = await res.json?.().catch(() => null);
+    throw new ErrorIA('respuesta_invalida', detalle?.status ? `Gemini respondió ${detalle.status}` : `HTTP ${res.status}`);
+  }
   let cuerpo;
   try {
     cuerpo = await res.json();

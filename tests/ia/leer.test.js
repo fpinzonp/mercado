@@ -83,3 +83,16 @@ test('leerTag termina en manual si nada funciona', async () => {
   });
   expect(r.fuente).toBe('manual');
 });
+
+test('cada falla de la IA deja un aviso que dice qué pasó', async () => {
+  const { leerProducto } = await import('../../src/ia/leer.js');
+  const casos = [
+    [new ErrorIA('sin_sesion'), /sesión/i],
+    [new ErrorIA('no_configurado'), /no está activada/i],
+    [new ErrorIA('respuesta_invalida', 'Gemini respondió 403'), /403/],
+  ];
+  for (const [error, esperado] of casos) {
+    const r = await leerProducto(blob(), { token: 't' }, { gemini: async () => { throw error; }, ocr: ocrArroz });
+    expect(r.aviso).toMatch(esperado);
+  }
+});
