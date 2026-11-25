@@ -1,10 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Datos públicos del proyecto: la clave "publishable" está hecha para ir en la app.
-// La seguridad la ponen las reglas de la base (cada usuario solo ve sus filas): ver supabase/esquema.sql.
-export const SUPABASE_URL = 'https://ycyurqnghgpdpqeuxtke.supabase.co';
-export const SUPABASE_CLAVE = 'sb_publishable_-313rz240qB2ie2Kgv3UlQ_tPW_NkIu';
-const APP_URL = 'https://fpinzonp.github.io/mercado/';
+import { SUPABASE_URL, SUPABASE_CLAVE, APP_URL } from './config.js';
+
+export { SUPABASE_URL, SUPABASE_CLAVE };
 
 const SOLAPE_MS = 60_000; // se vuelve a bajar el último minuto por si algo se guardó al mismo tiempo
 const PAGINA = 1000;
@@ -42,6 +40,8 @@ export function crearNube(sb = createClient(SUPABASE_URL, SUPABASE_CLAVE, {
       return { necesitaConfirmar: !data.session };
     },
     async salir() { await sb.auth.signOut(); },
+    /** Token de la sesión para llamar a la función que lee fotos. */
+    async token() { return (await sb.auth.getSession()).data.session?.access_token ?? null; },
 
     // Datos
     async subir(tabla, filas) {

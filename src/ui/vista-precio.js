@@ -16,6 +16,7 @@ export async function pintarPrecio(raiz, ctx, params = []) {
   const hoy = ctx.hoy();
   const leerProducto = ctx.leerProducto ?? leerProductoReal;
   const leerTag = ctx.leerTag ?? leerTagReal;
+  const tokenIA = async () => (await ctx.obtenerNube?.().catch(() => null))?.token?.() ?? null;
   const reducirImagen = ctx.reducirImagen ?? reducirReal;
   const e = await cargarEstado(repo);
   const producto = e.productos.get(params[0]);
@@ -179,7 +180,7 @@ export async function pintarPrecio(raiz, ctx, params = []) {
     estadoLectura.textContent = 'Leyendo el precio…';
     try {
       const blob = await reducirImagen(file);
-      const r = await leerTag(blob, { clave: e.ajustes.geminiClave, modelo: e.ajustes.geminiModelo, hoy });
+      const r = await leerTag(blob, { token: await tokenIA(), hoy });
       if (r.fuente === 'manual') {
         estadoLectura.textContent = r.aviso ?? 'No pude leer el tag; escribe el precio.';
         return;
@@ -231,8 +232,8 @@ export async function pintarPrecio(raiz, ctx, params = []) {
         previa.src = URL.createObjectURL(foto);
         previa.hidden = false;
       }
-      const [clave, modelo] = [e.ajustes.geminiClave, e.ajustes.geminiModelo];
-      const r = await leerProducto(foto, { clave, modelo });
+      const token = await tokenIA();
+      const r = await leerProducto(foto, { token });
       estadoLectura.textContent = r.aviso ?? (r.fuente === 'gemini' ? 'Revisa lo que leí y corrige si hace falta.' : '');
       // Si el tipo no está fijo, la unidad leída en el empaque lo propone; si no trae unidad, se usa el marcado.
       const fijo = bloqueado();

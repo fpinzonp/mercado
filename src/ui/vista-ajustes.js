@@ -47,103 +47,52 @@ const haceCuanto = (ms) => {
   return h < 24 ? `hace ${h} h` : `hace ${Math.round(h / 24)} días`;
 };
 
-/** Iniciar sesión con un código por correo y sincronizar entre dispositivos. */
-async function seccionDispositivos(ctx) {
+/** Tu cuenta: estado de la sincronización, sincronizar ahora y cerrar sesión (borra este teléfono). */
+async function seccionCuenta(ctx) {
   const nube = await ctx.obtenerNube?.().catch(() => null);
-  if (!nube) return null;
-  const seccion = h('section', { class: 'bloque dispositivos' });
+  const cuenta = nube ? await nube.cuenta().catch(() => null) : null;
+  if (!cuenta) return null;
+  const { repo } = ctx;
+  const estado = h('p', { role: 'status' }, `Última sincronización: ${haceCuanto(await repo.leerAjuste('ultimaSync'))}.`);
+  let ocupado = false;
 
-  const pintar = async () => {
-    const cuenta = await nube.cuenta().catch(() => null);
-    seccion.replaceChildren(h('h2', {}, 'Tus dispositivos'));
-    if (cuenta) {
-      const estado = h('p', { role: 'status' }, `Última sincronización: ${haceCuanto(await ctx.repo.leerAjuste('ultimaSync'))}.`);
-      let ocupado = false;
-      seccion.append(
-        h('p', {}, `Conectado como ${cuenta.email}. Tus datos se guardan también en la nube y se sincronizan solos.`),
-        estado,
-        h('button', {
-          class: 'boton', type: 'button',
-          onclick: async () => {
-            if (ocupado) return;
-            ocupado = true;
-            estado.textContent = 'Sincronizando…';
-            estado.textContent = MENSAJE_SYNC(await ctx.sync?.correr());
-            ocupado = false;
-          },
-        }, 'Sincronizar ahora'),
-        h('button', { class: 'boton secundario', type: 'button', onclick: async () => { await nube.salir(); await pintar(); } }, 'Cerrar sesión'),
-      );
-      return;
-    }
-
-    const correo = campo({ etiqueta: 'Tu correo', id: 'correo', type: 'email', autocomplete: 'email', inputmode: 'email', placeholder: 'nombre@correo.com' });
-    const clave = campo({ etiqueta: 'Contraseña', id: 'clave', type: 'password', autocomplete: 'current-password', ayuda: 'Al menos 8 caracteres. La misma en todos tus dispositivos.' });
-    const estado = h('p', { class: 'ayuda', role: 'status' });
-    correo.input.addEventListener('input', () => correo.mostrarError(''));
-    clave.input.addEventListener('input', () => clave.mostrarError(''));
-    const validar = () => {
-      const email = correo.input.value.trim();
-      const pass = clave.input.value;
-      const okCorreo = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-      correo.mostrarError(okCorreo ? '' : 'Escribe un correo válido, por ejemplo nombre@correo.com.');
-      clave.mostrarError(pass.length >= 8 ? '' : 'La contraseña debe tener al menos 8 caracteres.');
-      return okCorreo && pass.length >= 8 ? { email, pass } : null;
-    };
-    let ocupado = false;
-    const accion = (fn) => async () => {
-      const datos = validar();
-      if (!datos || ocupado) return;
-      ocupado = true;
-      estado.textContent = 'Un momento…';
-      try {
-        await fn(datos);
-      } catch (e) {
-        const m = e?.message ?? '';
-        estado.textContent = /invalid login|credentials/i.test(m) ? 'Correo o contraseña incorrectos.'
-          : /not confirmed/i.test(m) ? 'Falta confirmar el correo: abre el correo de Supabase y toca el enlace; luego vuelve aquí y toca Entrar.'
-            : /already registered|exists/i.test(m) ? 'Ese correo ya tiene cuenta: toca Entrar.'
-              : /rate|limit|seconds/i.test(m) ? 'Demasiados intentos seguidos. Espera unos minutos.'
-                : /fetch|network/i.test(m) ? 'Sin señal. Inténtalo cuando tengas conexión.'
-                  : `No se pudo: ${m}`;
-      }
-      ocupado = false;
-    };
-    // Primera vez en este dispositivo: baja los datos y, si ya hay mercados, lleva a la lista.
-    const despuesDeEntrar = async () => {
-      estado.textContent = 'Bajando tus datos…';
-      const r = await ctx.sync?.correr();
-      if ((await ctx.repo.listarMercados()).length && r?.ok) {
-        aviso('Listo: tus datos están en este dispositivo');
-        ctx.ir('#/lista');
-      }
-    };
-    const entrar = accion(async ({ email, pass }) => {
-      await nube.entrar(email, pass);
-      await pintar();
-      await despuesDeEntrar();
-    });
-    const crear = accion(async ({ email, pass }) => {
-      const { necesitaConfirmar } = await nube.crearCuenta(email, pass);
-      if (necesitaConfirmar) {
-        estado.textContent = `Te enviamos un correo para confirmar la cuenta a ${email}. Abre el enlace (puede abrir Safari; no importa), vuelve aquí y toca Entrar.`;
-        return;
-      }
-      await pintar();
-      await despuesDeEntrar();
-    });
-    seccion.append(
-      h('p', {}, 'Entra con tu correo para tener la misma lista, precios y fotos en todos tus dispositivos. Sin señal la app sigue funcionando y sube los cambios después.'),
-      correo.nodo, clave.nodo,
-      h('div', { class: 'acciones-lista' },
-        h('button', { class: 'boton', type: 'button', onclick: entrar }, 'Entrar'),
-        h('button', { class: 'boton secundario', type: 'button', onclick: crear }, 'Crear cuenta'),
-      ),
-      estado,
-    );
+  const salir = async () => {
+    estado.textContent = 'Subiendo los últimos cambios…';
+    const r = await ctx.sync?.correr();
+    const sinSubir = await repo.db.count('pendientes');
+    const cerrar = abrirHoja('¿Cerrar sesión?', h('div', {},
+      h('p', {}, 'Se borran la lista, los precios y las fotos de este teléfono. Siguen guardados en tu cuenta: al volver a entrar se bajan de nuevo.'),
+      sinSubir ? h('p', { class: 'error' }, `Hay ${sinSubir} ${sinSubir === 1 ? 'cambio' : 'cambios'} sin subir${r?.sinRed ? ' (no hay señal)' : ''}. Si cierras sesión ahora se pierden.`) : null,
+      h('button', {
+        class: 'boton peligro',
+        onclick: async () => {
+          await nube.salir();
+          await repo.borrarTodo();
+          cerrar();
+          ctx.ir('#/bienvenida/cuenta');
+        },
+      }, 'Cerrar sesión y borrar este teléfono'),
+      h('button', { class: 'boton secundario', onclick: () => cerrar() }, 'Cancelar'),
+    ));
+    estado.textContent = MENSAJE_SYNC(r);
   };
-  await pintar();
-  return seccion;
+
+  return h('section', { class: 'bloque cuenta' },
+    h('h2', {}, 'Tu cuenta'),
+    h('p', {}, `Conectado como ${cuenta.email}. Tus datos se guardan en la nube y se sincronizan solos entre tus dispositivos.`),
+    estado,
+    h('button', {
+      class: 'boton', type: 'button',
+      onclick: async () => {
+        if (ocupado) return;
+        ocupado = true;
+        estado.textContent = 'Sincronizando…';
+        estado.textContent = MENSAJE_SYNC(await ctx.sync?.correr());
+        ocupado = false;
+      },
+    }, 'Sincronizar ahora'),
+    h('button', { class: 'boton secundario', type: 'button', onclick: salir }, 'Cerrar sesión'),
+  );
 }
 
 export async function pintarAjustes(raiz, ctx) {
@@ -184,16 +133,6 @@ export async function pintarAjustes(raiz, ctx) {
     ctx.refrescar();
   });
 
-  // Gemini
-  const clave = campo({
-    etiqueta: 'Clave de Gemini', id: 'clave', type: 'password', autocomplete: 'off',
-    value: (await repo.leerAjuste('geminiClave')) ?? '',
-    ayuda: 'Sirve para leer el nombre del producto en la foto. Es gratis y solo se guarda en este teléfono.',
-  });
-  const modelo = campo({ etiqueta: 'Modelo de Gemini', id: 'modelo', autocomplete: 'off', value: await repo.leerAjuste('geminiModelo') });
-  clave.input.addEventListener('change', async () => { await repo.guardarAjuste('geminiClave', clave.input.value.trim() || null); aviso('Clave guardada'); });
-  modelo.input.addEventListener('change', async () => { await repo.guardarAjuste('geminiModelo', modelo.input.value.trim() || null); aviso('Modelo guardado'); });
-
   // Respaldo
   const archivo = h('input', { type: 'file', accept: 'application/json,.json', id: 'importar', class: 'oculto' });
   archivo.addEventListener('change', async () => {
@@ -209,46 +148,17 @@ export async function pintarAjustes(raiz, ctx) {
     archivo.value = '';
   });
 
-  const dispositivos = await seccionDispositivos(ctx);
+  const dispositivos = await seccionCuenta(ctx);
   raiz.append(
     h('h1', {}, 'Ajustes'),
     dispositivos,
     h('section', { class: 'bloque' }, h('h2', {}, 'Mercados'), listaMercados, formNuevo),
     h('section', { class: 'bloque' },
-      h('h2', {}, 'Leer fotos con Gemini'),
-      h('ol', { class: 'pasos' },
-        h('li', {}, 'Abre ', h('a', { href: 'https://aistudio.google.com/apikey', target: '_blank', rel: 'noopener' }, 'Google AI Studio'), ' con tu cuenta de Google.'),
-        h('li', {}, 'Toca "Create API key" y copia la clave.'),
-        h('li', {}, 'Pégala aquí abajo.'),
-      ),
-      clave.nodo, modelo.nodo,
-    ),
-    h('section', { class: 'bloque' },
       h('h2', {}, 'Respaldo'),
-      h('p', {}, 'Guarda una copia de tu lista, precios y fotos en Archivos o iCloud. La clave de Gemini no se incluye.'),
+      h('p', {}, 'Guarda una copia de tu lista, precios y fotos en Archivos o iCloud. Tus datos ya se guardan en la nube; esto es una copia extra.'),
       h('button', { class: 'boton', onclick: async () => { if (await guardarRespaldo(repo)) aviso('Respaldo guardado'); } }, 'Exportar respaldo'),
       h('label', { class: 'boton secundario', for: 'importar' }, 'Importar respaldo'), archivo,
-    ),
-    h('section', { class: 'bloque' },
-      h('h2', {}, 'Borrar todo'),
-      h('p', {}, 'Borra mercados, productos, precios, fotos y la lista de este teléfono. Lo guardado en la nube no se borra.'),
-      h('button', { class: 'boton peligro', onclick: () => confirmarBorrarTodo(ctx) }, 'Borrar todo'),
     ),
   );
 }
 
-function confirmarBorrarTodo(ctx) {
-  const c = campo({ etiqueta: 'Escribe BORRAR para confirmar', id: 'confirmar-borrar', autocomplete: 'off' });
-  const boton = h('button', { class: 'boton peligro', disabled: true }, 'Borrar todos los datos');
-  c.input.addEventListener('input', () => { boton.disabled = c.input.value.trim() !== 'BORRAR'; });
-  const cerrar = abrirHoja('¿Borrar todos los datos?', h('div', {},
-    h('p', {}, 'No se puede deshacer. Exporta un respaldo antes si quieres conservar algo.'),
-    c.nodo, boton,
-    h('button', { class: 'boton secundario', onclick: () => cerrar() }, 'Cancelar'),
-  ));
-  boton.addEventListener('click', async () => {
-    await ctx.repo.borrarTodo();
-    cerrar();
-    ctx.ir('#/bienvenida/mercados');
-  });
-}

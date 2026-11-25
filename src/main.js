@@ -11,7 +11,6 @@ const vistas = {
   bienvenida: pintarBienvenida,
   ajustes: pintarAjustes,
 };
-// Las demás vistas se registran a medida que existen (Tasks 8–10).
 const opcionales = {
   lista: () => import('./ui/vista-lista.js').then((m) => m.pintarLista),
   agregar: () => import('./ui/vista-agregar.js').then((m) => m.pintarAgregar),
@@ -28,10 +27,38 @@ async function arrancar() {
   const repo = await abrirDB();
   const ctx = { repo, hoy: () => hoyLocal() };
 
-  // Antes de pintar cualquier vista: instalar (iPhone) y crear mercados.
-  const guardian = async (nombre, vista) => async (r, c, p) => {
+  // La clave de Gemini ya no vive en el teléfono (está en el servidor): se borra la que hubiera quedado.
+  await repo.guardarAjuste('geminiClave', null);
+  await repo.guardarAjuste('geminiModelo', null);
+
+  // Cuenta y sincronización: se cargan antes de mostrar nada, porque sin sesión no se ve la app.
+  let nubePromesa = null;
+  ctx.obtenerNube = () => (nubePromesa ??= import('./datos/remoto-supabase.js').then((m) => m.crearNube()));
+  let nube = null;
+  try {
+    const [{ iniciarAutoSync }, n] = await Promise.all([import('./datos/auto-sync.js'), ctx.obtenerNube()]);
+    nube = n;
+    ctx.sync = iniciarAutoSync(repo, nube, {
+      alTerminar: (r) => {
+        document.body.dataset.sync = r.ok ? 'ok' : r.sinRed ? 'sin-red' : 'error';
+        // Si llegaron cambios de otro dispositivo, repinta las pantallas de consulta (no los formularios).
+        if (r.ok && r.bajados > 0 && ['lista', 'productos', 'comprar'].includes(document.body.dataset.vista)) ctx.refrescar();
+      },
+    });
+  } catch (e) {
+    console.warn('No se pudo cargar la cuenta', e);
+  }
+
+  // Antes de pintar cualquier vista: instalar (iPhone), entrar con la cuenta y crear mercados.
+  const guardian = (nombre, vista) => async (r, c, p) => {
     const ir = await redireccion({
-      vista: nombre, repo, esIOS: esIOS(), instalada: estaInstalada(), sinInstalar: Boolean(sessionStorage.getItem('sinInstalar')),
+      vista: nombre,
+      paso: p?.[0],
+      repo,
+      esIOS: esIOS(),
+      instalada: estaInstalada(),
+      sinInstalar: Boolean(sessionStorage.getItem('sinInstalar')),
+      conectado: nube ? await nube.conectado().catch(() => false) : false,
     });
     if (ir) {
       document.body.dataset.vista = 'bienvenida';
@@ -40,28 +67,11 @@ async function arrancar() {
     return vista(r, c, p);
   };
   const rutas = {};
-  for (const [n, v] of Object.entries(vistas)) rutas[n] = await guardian(n, v);
-
-  // La nube se carga aparte, para no demorar la primera pantalla.
-  let nubePromesa = null;
-  ctx.obtenerNube = () => (nubePromesa ??= import('./datos/remoto-supabase.js').then((m) => m.crearNube()));
+  for (const [n, v] of Object.entries(vistas)) rutas[n] = guardian(n, v);
 
   await iniciarRouter(raiz, rutas, ctx);
   navigator.storage?.persist?.().catch(() => {});
-
-  try {
-    const [{ iniciarAutoSync }, nube] = await Promise.all([import('./datos/auto-sync.js'), ctx.obtenerNube()]);
-    ctx.sync = iniciarAutoSync(repo, nube, {
-      alTerminar: (r) => {
-        document.body.dataset.sync = r.ok ? 'ok' : r.sinRed ? 'sin-red' : 'error';
-        // Si llegaron cambios de otro dispositivo, repinta las pantallas de consulta (no los formularios).
-        if (r.ok && r.bajados > 0 && ['lista', 'productos', 'comprar'].includes(document.body.dataset.vista)) ctx.refrescar();
-      },
-    });
-    ctx.sync.correr();
-  } catch (e) {
-    console.warn('Sin sincronización por ahora', e);
-  }
+  ctx.sync?.correr();
 }
 
 arrancar();

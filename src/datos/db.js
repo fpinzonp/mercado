@@ -4,7 +4,7 @@ import { hoyLocal } from '../logica/fechas.js';
 
 const VERSION = 2;
 export const TABLAS_SYNC = ['mercados', 'productos', 'ofertas', 'lista'];
-const DEFAULTS = { geminiModelo: 'gemini-flash-latest' };
+const DEFAULTS = {};
 // randomUUID solo existe en contexto seguro (https); en http de la red local se arma a mano.
 const nuevoId = () => {
   if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
@@ -202,9 +202,7 @@ export async function abrirDB(nombre = 'mercado') {
       const almacenes = ['mercados', 'productos', 'ofertas', 'fotos', 'lista', 'pendientes'];
       const tx = db.transaction([...almacenes, 'ajustes'], 'readwrite');
       for (const a of almacenes) await tx.objectStore(a).clear();
-      for (const c of ['ultimoCambio', 'primerCambio', 'ultimoRespaldo', 'mercadoActivo', 'ultimoMercadoPrecio', 'syncDesde', 'syncInicial', 'ultimaSync']) {
-        await tx.objectStore('ajustes').delete(c);
-      }
+      await tx.objectStore('ajustes').clear(); // también la sesión de sincronización de este teléfono
       await tx.done;
     },
   };

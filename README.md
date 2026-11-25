@@ -11,15 +11,6 @@ Lista de mercado y comparador de precios para el iPhone. Le tomas una foto al pr
 
 Instalada, la lista, el tachado y la comparación funcionan sin señal.
 
-## Clave de Gemini (gratis)
-
-Sirve para leer el nombre y el tamaño del producto en la foto.
-
-1. Entra a [Google AI Studio](https://aistudio.google.com/apikey) con tu cuenta de Google.
-2. Toca **Create API key** y copia la clave.
-3. En la app: **Ajustes → Clave de Gemini**, pégala.
-
-La clave solo se guarda en el teléfono. Sin clave, sin señal o si se acaba el cupo gratis del día, la app intenta leer la etiqueta con el propio teléfono. Si tampoco puede, escribes el nombre a mano.
 
 ## Respaldo
 
@@ -38,6 +29,10 @@ Se publica en GitHub Pages con cada push a `main` (`.github/workflows/deploy.yml
 
 ## Sincronizar entre dispositivos (Supabase gratis)
 
-**Ajustes → Tus dispositivos**: entras con tu correo y una contraseña. Desde ahí la lista, los precios y las fotos se sincronizan solos entre todos tus dispositivos. Sin señal todo sigue funcionando en el teléfono y se sube después. Si dos dispositivos cambian lo mismo, gana el cambio más reciente; los productos con el mismo nombre (sin importar mayúsculas, tildes ni espacios) se unen en uno.
+Lo primero que pide la app es entrar con tu correo y una contraseña; sin sesión no se ve nada. Desde ahí la lista, los precios y las fotos se sincronizan solos entre todos tus dispositivos. Sin señal todo sigue funcionando en el teléfono y se sube después. Si dos dispositivos cambian lo mismo, gana el cambio más reciente; los productos con el mismo nombre (sin importar mayúsculas, tildes ni espacios) se unen en uno.
 
 Configuración (una sola vez): en Supabase → **SQL Editor** pega y ejecuta `supabase/esquema.sql`. En **Authentication → URL Configuration**, pon como *Site URL* https://fpinzonp.github.io/mercado/ para que el enlace de confirmación de la cuenta abra la app. El flujo `supabase-activo.yml` evita que el proyecto gratis se pause por inactividad.
+
+## Lectura de fotos con IA (Gemini en el servidor)
+
+La clave de Gemini nunca va en el teléfono: vive como secreto en la función `supabase/functions/leer-foto`, que solo responde a usuarios con sesión. Para activarla: Supabase → **Edge Functions → Deploy a new function → Via Editor**, nombre `leer-foto`, pega `index.ts` y despliega; luego en **Edge Functions → Secrets** agrega `GEMINI_API_KEY` (la clave de https://aistudio.google.com/apikey). Sin eso, las fotos se leen en el teléfono.

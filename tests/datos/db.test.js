@@ -57,11 +57,10 @@ test('nuevaLista destachar y vaciar conservan catálogo y ofertas', async () => 
   expect((await repo.ofertasPorProducto()).get(arroz.id)).toHaveLength(1);
 });
 
-test('ajustes con valor por defecto del modelo y registro de cambios', async () => {
+test('ajustes y registro de cambios', async () => {
   const repo = await nuevaDB();
-  expect(await repo.leerAjuste('geminiModelo')).toBe('gemini-flash-latest');
-  await repo.guardarAjuste('geminiClave', 'abc');
-  expect(await repo.leerAjuste('geminiClave')).toBe('abc');
+  await repo.guardarAjuste('mercadoActivo', 'abc');
+  expect(await repo.leerAjuste('mercadoActivo')).toBe('abc');
   expect(await repo.leerAjuste('ultimoCambio')).toBeUndefined();
   await repo.guardarMercado({ nombre: 'D1' });
   expect(await repo.leerAjuste('ultimoCambio')).toMatch(/^\d{4}-\d{2}-\d{2}$/);

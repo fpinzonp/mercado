@@ -39,7 +39,7 @@ test('Gemini se corta a los segundos y cuenta como sin señal', async () => {
   vi.useFakeTimers();
   // fetch que nunca responde salvo que lo aborten
   const fetchImpl = (url, init) => new Promise((_, rej) => init?.signal?.addEventListener('abort', () => rej(new DOMException('t', 'AbortError'))));
-  const p = leerEtiquetaGemini(new Blob(['x']), { clave: 'k', modelo: 'm', fetchImpl, espera: 8000 });
+  const p = leerEtiquetaGemini(new Blob(['x']), { token: 't', fetchImpl, espera: 8000 });
   let resultado = 'pendiente';
   p.then(() => { resultado = 'ok'; }, (e) => { resultado = e.codigo; });
   await vi.advanceTimersByTimeAsync(8001);
@@ -50,7 +50,7 @@ test('Gemini se corta a los segundos y cuenta como sin señal', async () => {
 test('sin conexión no llama a Gemini', async () => {
   vi.stubGlobal('navigator', { ...navigator, onLine: false });
   const fetchImpl = vi.fn();
-  await expect(leerEtiquetaGemini(new Blob(['x']), { clave: 'k', modelo: 'm', fetchImpl })).rejects.toMatchObject({ codigo: 'sin_red' });
+  await expect(leerEtiquetaGemini(new Blob(['x']), { token: 't', fetchImpl })).rejects.toMatchObject({ codigo: 'sin_red' });
   expect(fetchImpl).not.toHaveBeenCalled();
 });
 

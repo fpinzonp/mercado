@@ -7,7 +7,7 @@ export async function cargarEstado(repo) {
     repo.ofertasPorProducto(),
   ]);
   const ajustes = {};
-  for (const c of ['geminiClave', 'geminiModelo', 'ultimoRespaldo', 'ultimoCambio', 'primerCambio', 'mercadoActivo', 'ultimoMercadoPrecio']) {
+  for (const c of ['ultimoRespaldo', 'ultimoCambio', 'primerCambio', 'mercadoActivo', 'ultimoMercadoPrecio']) {
     ajustes[c] = await repo.leerAjuste(c);
   }
   return {
