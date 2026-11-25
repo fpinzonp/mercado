@@ -38,6 +38,27 @@ export function convertir(valor, unidad, tipoUnidad) {
   return Math.round(valor * u[1] * 1000) / 1000;
 }
 
+/** 'kg' → 'g', 'L' → 'ml', 'und' → 'unidad'; null si no es una unidad conocida. */
+export function tipoDeUnidad(unidad) {
+  const clave = String(unidad ?? '').trim().toLowerCase().replace(/[.]+$/, '');
+  return UNIDADES[clave]?.[0] ?? null;
+}
+
+/**
+ * Tamaño de la presentación con su tipo de medida: "1 kg" → {tamano: 1000, tipo: 'g'}.
+ * Sin unidad escrita usa el tipo dado (que puede ser null). null si no se entiende o choca con el tipo.
+ */
+export function parseTamano(texto, tipo) {
+  const m = String(texto ?? '').trim().match(/^([\d.,]+)\s*([a-zA-Z]*)[.]?$/);
+  if (!m) return null;
+  const n = parseNumero(m[1]);
+  if (n === null || n <= 0) return null;
+  if (!m[2]) return { tamano: n, tipo: tipo ?? null };
+  const t = tipoDeUnidad(m[2]);
+  if (!t || (tipo && t !== tipo)) return null;
+  return { tamano: convertir(n, m[2], t), tipo: t };
+}
+
 /** "2 kg", "1,5 L", "500" → cantidad en unidad interna (> 0), o null. */
 export function parseCantidad(texto, tipoUnidad) {
   const m = String(texto ?? '').trim().match(/^([\d.,]+)\s*([a-zA-Z]*)[.]?$/);

@@ -13,11 +13,17 @@ test('detectarTamano', () => {
 });
 
 test('normalizarLectura convierte y limpia', () => {
-  expect(normalizarLectura({ nombre: ' Leche Alpina ', tamano: 1, unidad: 'L' }, 'ml')).toEqual({ nombre: 'Leche Alpina', tamano: 1000 });
-  expect(normalizarLectura({ nombre: 'Huevos', tamano: 30, unidad: 'unidad' }, 'unidad')).toEqual({ nombre: 'Huevos', tamano: 30 });
+  expect(normalizarLectura({ nombre: ' Leche Alpina ', tamano: 1, unidad: 'L' }, 'ml')).toEqual({ nombre: 'Leche Alpina', tamano: 1000, tipo: 'ml' });
+  expect(normalizarLectura({ nombre: 'Huevos', tamano: 30, unidad: 'unidad' }, 'unidad')).toEqual({ nombre: 'Huevos', tamano: 30, tipo: 'unidad' });
 });
 
 test('normalizarLectura deja tamaño vacío si la unidad no es compatible', () => {
-  expect(normalizarLectura({ nombre: 'Leche', tamano: 1, unidad: 'L' }, 'g')).toEqual({ nombre: 'Leche', tamano: null });
-  expect(normalizarLectura({ nombre: null }, 'g')).toEqual({ nombre: '', tamano: null });
+  expect(normalizarLectura({ nombre: 'Leche', tamano: 1, unidad: 'L' }, 'g')).toEqual({ nombre: 'Leche', tamano: null, tipo: 'g' });
+  expect(normalizarLectura({ nombre: null }, 'g')).toEqual({ nombre: '', tamano: null, tipo: 'g' });
+});
+
+test('normalizarLectura sin tipo de medida lo deduce de la unidad leída', () => {
+  expect(normalizarLectura({ nombre: 'Leche', tamano: 1, unidad: 'L' }, null)).toEqual({ nombre: 'Leche', tamano: 1000, tipo: 'ml' });
+  expect(normalizarLectura({ nombre: 'Arroz', tamano: 500, unidad: 'g' }, undefined)).toEqual({ nombre: 'Arroz', tamano: 500, tipo: 'g' });
+  expect(normalizarLectura({ nombre: 'Huevos', tamano: 30, unidad: null }, null)).toEqual({ nombre: 'Huevos', tamano: null, tipo: null });
 });

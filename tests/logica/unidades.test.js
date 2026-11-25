@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { parsePrecio, parseCantidad, convertir, formatoCOP, formatoCantidad, formatoUnitario } from '../../src/logica/unidades.js';
+import { parsePrecio, parseCantidad, convertir, formatoCOP, formatoCantidad, formatoUnitario, tipoDeUnidad, parseTamano } from '../../src/logica/unidades.js';
 
 test('parsePrecio entiende precios a la colombiana', () => {
   expect(parsePrecio('4.500')).toBe(4500);
@@ -36,4 +36,17 @@ test('formatos', () => {
   expect(formatoCantidad(30, 'unidad')).toBe('30 un');
   expect(formatoUnitario(4500, 1000, 'g')).toBe('$4,50/g');
   expect(formatoUnitario(13500, 30, 'unidad')).toBe('$450,00/un');
+});
+
+test('tipoDeUnidad y parseTamano deducen el tipo de medida', () => {
+  expect(tipoDeUnidad('kg')).toBe('g');
+  expect(tipoDeUnidad('L')).toBe('ml');
+  expect(tipoDeUnidad('und')).toBe('unidad');
+  expect(tipoDeUnidad('xyz')).toBeNull();
+  expect(parseTamano('1 kg', null)).toEqual({ tamano: 1000, tipo: 'g' });
+  expect(parseTamano('750 ml', 'ml')).toEqual({ tamano: 750, tipo: 'ml' });
+  expect(parseTamano('500', 'g')).toEqual({ tamano: 500, tipo: 'g' });
+  expect(parseTamano('500', null)).toEqual({ tamano: 500, tipo: null });
+  expect(parseTamano('1 kg', 'ml')).toBeNull();
+  expect(parseTamano('', 'g')).toBeNull();
 });

@@ -14,6 +14,7 @@ const vistas = {
 const opcionales = {
   lista: () => import('./ui/vista-lista.js').then((m) => m.pintarLista),
   agregar: () => import('./ui/vista-agregar.js').then((m) => m.pintarAgregar),
+  productos: () => import('./ui/vista-productos.js').then((m) => m.pintarProductos),
   precio: () => import('./ui/vista-precio.js').then((m) => m.pintarPrecio),
   comprar: () => import('./ui/vista-comprar.js').then((m) => m.pintarComprar),
 };

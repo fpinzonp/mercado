@@ -3,12 +3,13 @@ import { cargarEstado } from './estado.js';
 import { leerProducto as leerProductoReal } from '../ia/leer.js';
 import { reducirImagen as reducirReal } from '../img/reducir.js';
 import { normalizarLectura } from '../logica/tamano.js';
-import { parsePrecio, parseCantidad, formatoCOP } from '../logica/unidades.js';
+import { parsePrecio, parseTamano, tipoDeUnidad, formatoCOP } from '../logica/unidades.js';
 import { descuentoVigente } from '../logica/comparar.js';
 
 const sinSigno = (n) => formatoCOP(n).slice(1);
 const NOMBRE_TIPO = { g: 'gramos', ml: 'mililitros', unidad: 'unidades' };
 const EJEMPLO_TAMANO = { g: '500 g o 1 kg', ml: '750 ml o 1 L', unidad: '30' };
+const TIPOS = [['g', 'Peso'], ['ml', 'Líquido'], ['unidad', 'Unidades']];
 
 export async function pintarPrecio(raiz, ctx, params = []) {
   const { repo } = ctx;
@@ -22,7 +23,7 @@ export async function pintarPrecio(raiz, ctx, params = []) {
     raiz.append(h('p', {}, 'Este producto ya no existe.'), h('button', { class: 'boton', onclick: () => ctx.ir('#/lista') }, 'Volver a la lista'));
     return;
   }
-  const volverA = ctx.rutaAnterior?.startsWith('#/comprar') ? '#/comprar' : '#/lista';
+  const volverA = ['#/comprar', '#/productos'].find((r) => ctx.rutaAnterior?.startsWith(r)) ?? '#/lista';
   const ofertas = e.ofertasPorProducto.get(producto.id) ?? [];
   let foto = null;
 
@@ -39,12 +40,36 @@ export async function pintarPrecio(raiz, ctx, params = []) {
   const estadoLectura = h('p', { class: 'leyendo', role: 'status' });
   const palabras = h('div', { class: 'palabras' });
 
+  // Tipo de medida: se define aquí. Queda fijo si ya hay precios en otros mercados (para que se puedan comparar).
+  let tipo = producto.tipoUnidad ?? null;
+  const tipoError = h('p', { class: 'error', role: 'alert', hidden: true });
+  const notaTipo = h('p', { class: 'ayuda' });
+  const radiosTipo = TIPOS.map(([valor]) => h('input', { type: 'radio', name: 'tipo', value: valor }));
+  const selectorTipo = h('fieldset', { class: 'opciones' },
+    h('legend', {}, '¿Cómo se mide?'),
+    TIPOS.map(([, etiqueta], i) => h('label', {}, radiosTipo[i], h('span', {}, etiqueta))),
+  );
+  const bloqueado = () => Boolean(producto.tipoUnidad) && ofertas.some((o) => o.mercadoId !== selMercado.value);
+
   // Campos
   const nombre = campo({ etiqueta: 'Nombre real', id: 'nombre', autocomplete: 'off', placeholder: `Ej. ${producto.nombre} marca X` });
-  const tamano = campo({
-    etiqueta: `Tamaño de la presentación (${NOMBRE_TIPO[producto.tipoUnidad]})`, id: 'tamano', autocomplete: 'off',
-    inputmode: 'decimal', ayuda: `Ej. ${EJEMPLO_TAMANO[producto.tipoUnidad]}`,
-  });
+  const tamano = campo({ etiqueta: 'Tamaño de la presentación', id: 'tamano', autocomplete: 'off', inputmode: 'decimal', ayuda: ' ' });
+  const ayudaTamano = tamano.nodo.querySelector('.ayuda');
+  const elegirTipo = (t) => {
+    tipo = t;
+    for (const r of radiosTipo) r.checked = r.value === t;
+    if (ayudaTamano) ayudaTamano.textContent = t ? `Ej. ${EJEMPLO_TAMANO[t]}` : 'Ej. 500 g, 1 L o 30 (unidades)';
+    if (t) tipoError.hidden = true;
+  };
+  const pintarTipo = () => {
+    const fijo = bloqueado();
+    if (fijo) elegirTipo(producto.tipoUnidad);
+    for (const r of radiosTipo) r.disabled = fijo;
+    notaTipo.textContent = fijo ? `Se mide en ${NOMBRE_TIPO[producto.tipoUnidad]} porque ya tiene precios en otros mercados.` : '';
+    notaTipo.hidden = !fijo;
+  };
+  for (const r of radiosTipo) r.addEventListener('change', () => { if (r.checked) elegirTipo(r.value); });
+  elegirTipo(tipo);
   const precio = campo({ etiqueta: 'Precio normal', id: 'precio', autocomplete: 'off', inputmode: 'numeric', placeholder: 'Ej. 4.500' });
 
   const tieneDesc = h('input', { type: 'checkbox', id: 'tiene-descuento' });
@@ -73,10 +98,29 @@ export async function pintarPrecio(raiz, ctx, params = []) {
     nombre.mostrarError(v ? '' : 'Escribe el nombre del producto.');
     return v || null;
   };
+  // jsdom y algunos navegadores no avisan el cambio de radio a tiempo: se lee el marcado al validar.
+  const tipoMarcado = () => selectorTipo.querySelector('input[name=tipo]:checked')?.value ?? tipo;
   const validarTamano = () => {
-    const v = parseCantidad(tamano.input.value, producto.tipoUnidad);
-    tamano.mostrarError(v ? '' : `Escribe el tamaño, por ejemplo ${EJEMPLO_TAMANO[producto.tipoUnidad]}.`);
-    return v;
+    const actual = tipoMarcado();
+    const fijo = bloqueado();
+    // Sin bloqueo, la unidad escrita ("1 L") manda sobre el tipo marcado.
+    const r = parseTamano(tamano.input.value, fijo ? actual : null);
+    if (!r) {
+      const ej = actual ? EJEMPLO_TAMANO[actual] : '500 g o 1 L';
+      tamano.mostrarError(fijo && tipoDeUnidad(tamano.input.value.replace(/[\d.,\s]/g, ''))
+        ? `Este producto se mide en ${NOMBRE_TIPO[actual]}; escribe el tamaño así, por ejemplo ${ej}.`
+        : `Escribe el tamaño, por ejemplo ${ej}.`);
+      return null;
+    }
+    tamano.mostrarError('');
+    const t = r.tipo ?? actual;
+    if (!t) {
+      tipoError.textContent = 'Elige si se mide por peso, líquido o unidades.';
+      tipoError.hidden = false;
+      return null;
+    }
+    if (t !== tipo || t !== actual) elegirTipo(t);
+    return { tamano: r.tamano, tipo: t };
   };
   const validarPrecio = () => {
     const v = parsePrecio(precio.input.value);
@@ -112,6 +156,7 @@ export async function pintarPrecio(raiz, ctx, params = []) {
     porcentaje.input.value = '';
     detalle.input.value = vigente ? o.detalleDescuento ?? '' : '';
     hasta.input.value = vigente ? o.descuentoHasta ?? '' : '';
+    pintarTipo();
   };
   selMercado.addEventListener('change', prellenar);
   prellenar();
@@ -137,11 +182,15 @@ export async function pintarPrecio(raiz, ctx, params = []) {
       const [clave, modelo] = [e.ajustes.geminiClave, e.ajustes.geminiModelo];
       const r = await leerProducto(foto, { clave, modelo });
       estadoLectura.textContent = r.aviso ?? (r.fuente === 'gemini' ? 'Revisa lo que leí y corrige si hace falta.' : '');
-      const lectura = normalizarLectura(r, producto.tipoUnidad);
+      // Si el tipo no está fijo, la unidad leída en el empaque lo propone; si no trae unidad, se usa el marcado.
+      const fijo = bloqueado();
+      const lectura = normalizarLectura(r, fijo ? tipo : (tipoDeUnidad(r.unidad) || tipoMarcado()));
       if (r.fuente === 'gemini' && lectura.nombre && !editado.nombre) nombre.input.value = lectura.nombre;
       if (!editado.tamano) {
-        if (lectura.tamano) tamano.input.value = String(lectura.tamano);
-        else if (r.fuente === 'gemini') tamano.input.value = '';
+        if (lectura.tamano) {
+          tamano.input.value = String(lectura.tamano);
+          if (!fijo && lectura.tipo) elegirTipo(lectura.tipo);
+        } else if (r.fuente === 'gemini') tamano.input.value = '';
       }
       if (r.fuente === 'ocr') {
         if (!r.aviso) estadoLectura.textContent = 'Toca las palabras del nombre en orden.';
@@ -171,7 +220,7 @@ export async function pintarPrecio(raiz, ctx, params = []) {
     h('div', { class: 'campo' }, h('label', { for: 'mercado' }, 'Mercado'), selMercado),
     h('label', { class: 'boton', for: 'foto' }, 'Tomar foto'), inputFoto,
     previa, estadoLectura, palabras,
-    nombre.nodo, tamano.nodo, precio.nodo,
+    nombre.nodo, selectorTipo, notaTipo, tipoError, tamano.nodo, precio.nodo,
     h('label', { class: 'interruptor', for: 'tiene-descuento' }, tieneDesc, 'Tiene descuento'),
     zonaDesc,
     h('button', { class: 'boton', type: 'submit' }, 'Guardar precio'),
@@ -191,13 +240,14 @@ export async function pintarPrecio(raiz, ctx, params = []) {
       return;
     }
     guardando = true;
+    if (vTamano.tipo !== producto.tipoUnidad) await repo.guardarProducto({ ...producto, tipoUnidad: vTamano.tipo });
     const anterior = ofertas.find((x) => x.mercadoId === selMercado.value);
     const fotoId = foto ? await repo.guardarFoto(foto) : anterior?.fotoId;
     await repo.guardarOferta({
       productoId: producto.id,
       mercadoId: selMercado.value,
       nombreReal: vNombre,
-      tamano: vTamano,
+      tamano: vTamano.tamano,
       precioNormal: vPrecio,
       ...(fotoId ? { fotoId } : {}),
       precioDescuento: desc.valor,

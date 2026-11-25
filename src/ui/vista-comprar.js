@@ -1,7 +1,7 @@
 import { h, limpiar } from './dom.js';
 import { cargarEstado } from './estado.js';
-import { repartirCompra, costoItem } from '../logica/comparar.js';
-import { formatoCOP, formatoCantidad } from '../logica/unidades.js';
+import { repartirCompra, precioOferta } from '../logica/comparar.js';
+import { formatoCOP, formatoCantidad, formatoUnitario } from '../logica/unidades.js';
 
 export async function pintarComprar(raiz, ctx) {
   const { repo } = ctx;
@@ -30,7 +30,7 @@ export async function pintarComprar(raiz, ctx) {
     const producto = e.productos.get(item.productoId);
     if (!producto) return null;
     const oferta = (e.ofertasPorProducto.get(item.productoId) ?? []).find((o) => o.mercadoId === activo.id);
-    const costo = oferta ? costoItem(item.cantidad, oferta, hoy) : null;
+    const costo = oferta ? precioOferta(oferta, hoy) : null;
     const check = h('input', { type: 'checkbox', checked: item.tachado, 'aria-label': `Tachar ${producto.nombre}` });
     check.addEventListener('click', async () => {
       await repo.tacharItem(item.id, item.tachado ? null : activo.id);
@@ -39,10 +39,14 @@ export async function pintarComprar(raiz, ctx) {
     return h('li', { class: `item${item.tachado ? ' tachado' : ''}` },
       h('div', { class: 'item-cabeza' },
         check,
-        h('span', { class: 'item-nombre' }, `${producto.nombre} · `, h('span', { class: 'item-cantidad' }, formatoCantidad(item.cantidad, producto.tipoUnidad))),
+        h('span', { class: 'item-nombre' }, producto.nombre),
         costo ? h('span', { class: 'costo precio' }, formatoCOP(costo.costo)) : h('span'),
       ),
-      oferta && !item.tachado ? h('p', { class: 'nota-otro' }, `${oferta.nombreReal ?? ''}${costo?.conDescuento ? ' · con descuento' : ''}`) : null,
+      oferta && costo && !item.tachado ? h('p', { class: 'nota-otro' }, [
+        [oferta.nombreReal, formatoCantidad(oferta.tamano, producto.tipoUnidad)].filter(Boolean).join(' '),
+        formatoUnitario(costo.costo, oferta.tamano, producto.tipoUnidad),
+        costo.conDescuento ? 'con descuento' : null,
+      ].filter(Boolean).join(' · ')) : null,
       extra,
       !oferta && !item.tachado
         ? h('button', { class: 'boton-texto agregar-precio', onclick: () => ctx.ir(`#/precio/${producto.id}`) }, `+ Agregar precio en ${activo.nombre}`)
@@ -79,11 +83,11 @@ export async function pintarComprar(raiz, ctx) {
     if (otros.length) {
       raiz.append(h('details', { class: 'otros' },
         h('summary', {}, `Más barato en otro mercado (${otros.length})`),
-        h('ul', { class: 'items' }, otros.map(({ item, mercadoId, diferencia }) => {
+        h('ul', { class: 'items' }, otros.map(({ item, mercadoId, porcentaje }) => {
           const donde = e.mercadosPorId.get(mercadoId)?.nombre ?? 'otro mercado';
-          const nota = diferencia == null
+          const nota = porcentaje == null
             ? `Sin precio aquí; más barato en ${donde}.`
-            : `Más barato en ${donde} por ${formatoCOP(diferencia)}.`;
+            : `Aquí sale ${porcentaje}% más caro que en ${donde}.`;
           return filaItem(item, h('p', { class: 'nota-otro' }, nota));
         })),
       ));

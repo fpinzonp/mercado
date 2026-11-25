@@ -86,9 +86,9 @@ test('cambiar la foto de una oferta borra la anterior; borrar mercado borra sus 
 });
 
 // I-5
-test('agregar un producto que estaba tachado lo destacha y reemplaza la cantidad', async () => {
+test('agregar un producto que estaba tachado lo destacha', async () => {
   const { repo, arroz } = await conDatos();
-  const item = await repo.guardarItem({ productoId: arroz.id, cantidad: 2000 });
+  const item = await repo.guardarItem({ productoId: arroz.id });
   await repo.tacharItem(item.id, 'd1');
   const raiz = document.createElement('div');
   const ctx = { repo, hoy: () => hoy, ir: vi.fn() };
@@ -97,22 +97,21 @@ test('agregar un producto que estaba tachado lo destacha y reemplaza la cantidad
   b.value = 'arroz';
   b.dispatchEvent(new Event('input'));
   raiz.querySelector(`[data-producto="${arroz.id}"]`).click();
-  raiz.querySelector('#cantidad').value = '1 kg';
-  raiz.querySelector('form.cantidad').dispatchEvent(new Event('submit', { cancelable: true }));
   await vi.waitFor(() => expect(ctx.ir).toHaveBeenCalled());
-  const [i] = await repo.listarItems();
-  expect(i).toMatchObject({ tachado: false, cantidad: 1000 });
-  expect(i.compradoEn).toBeUndefined();
+  const items = await repo.listarItems();
+  expect(items).toHaveLength(1);
+  expect(items[0]).toMatchObject({ tachado: false });
+  expect(items[0].compradoEn).toBeUndefined();
 });
 
 // I-6
 test('la oferta con descuento muestra cuánto se ahorra', async () => {
   const { repo, d1, arroz } = await conDatos();
   await repo.guardarOferta({ productoId: arroz.id, mercadoId: d1.id, tamano: 1000, precioNormal: 5000, precioDescuento: 4000, descuentoHasta: '2026-11-30' }, hoy);
-  await repo.guardarItem({ productoId: arroz.id, cantidad: 2000 });
+  await repo.guardarItem({ productoId: arroz.id });
   const raiz = document.createElement('div');
   await pintarLista(raiz, { repo, hoy: () => hoy, ir: vi.fn() });
-  expect(raiz.textContent).toContain('ahorras $2.000');
+  expect(raiz.textContent).toContain('ahorras $1.000');
 });
 
 // Precio: M-4 doble toque, M-3 OCR no borra nombre, M-1 fecha pasada, I-2 no pisar lo escrito

@@ -17,11 +17,8 @@ export function filaOferta(fila, { producto, mercado, soloPorDescuento, hoy, alT
   } else if (fila.esMasBaratoHoy) {
     marcas.push(h('span', { class: 'marca mejor' }, '✓ más barato'));
   }
-  const precio = vigente
-    ? [h('s', {}, formatoCOP(o.precioNormal)), ' ', h('span', { class: 'promo precio' }, formatoCOP(o.precioDescuento))]
-    : [h('span', { class: 'precio' }, formatoCOP(o.precioNormal))];
   const detalle = [
-    h('span', {}, precio, ` × ${fila.paquetes}`),
+    vigente ? h('s', {}, formatoCOP(o.precioNormal)) : null,
     h('span', { class: 'num' }, formatoUnitario(vigente ? o.precioDescuento : o.precioNormal, o.tamano, producto.tipoUnidad)),
   ];
   if (vigente) {
@@ -39,7 +36,7 @@ export function filaOferta(fila, { producto, mercado, soloPorDescuento, hoy, alT
   const contenido = [
     h('span', {}, h('span', { class: 'donde' }, mercado?.nombre ?? '—'), ' ',
       h('span', { class: 'real' }, [o.nombreReal, formatoCantidad(o.tamano, producto.tipoUnidad)].filter(Boolean).join(' '))),
-    h('span', { class: 'costo' }, formatoCOP(fila.costo)),
+    h('span', { class: `costo${vigente ? ' promo' : ''}` }, formatoCOP(fila.costo)),
     h('span', { class: 'detalle' }, detalle),
   ];
   const li = h('li', { class: 'oferta' });
@@ -78,7 +75,7 @@ export async function pintarLista(raiz, ctx) {
 
   if (!e.items.length) {
     raiz.append(h('div', { class: 'vacio' },
-      h('p', {}, 'Tu lista está vacía. Agrega lo que necesitas comprar y cuánto.'),
+      h('p', {}, 'Tu lista está vacía. Agrega lo que necesitas comprar; solo hace falta el nombre.'),
       h('button', { class: 'boton', onclick: () => ctx.ir('#/agregar') }, 'Agregar producto'),
     ));
     return;
@@ -98,6 +95,7 @@ export async function pintarLista(raiz, ctx) {
         t.faltan ? h('span', { class: 'faltan' }, `faltan ${t.faltan} ${t.faltan === 1 ? 'precio' : 'precios'}`) : null,
       )),
     ));
+    raiz.append(h('p', { class: 'ayuda' }, 'Cada producto cuenta con la misma cantidad en todos los mercados.'));
     const comb = totalCombinado(e.items, e.ofertasPorProducto, e.mercados, hoy);
     raiz.append(h('p', { class: 'combinado' },
       'Repartiendo la compra: ', h('strong', {}, formatoCOP(comb.total)),
@@ -124,7 +122,7 @@ export async function pintarLista(raiz, ctx) {
     return h('li', { class: `item${item.tachado ? ' tachado' : ''}` },
       h('div', { class: 'item-cabeza' },
         check,
-        h('span', { class: 'item-nombre' }, `${producto.nombre} · `, h('span', { class: 'item-cantidad' }, formatoCantidad(item.cantidad, producto.tipoUnidad))),
+        h('span', { class: 'item-nombre' }, producto.nombre),
         h('button', {
           class: 'boton-texto peligro', 'aria-label': `Quitar ${producto.nombre} de la lista`,
           onclick: async () => { await repo.borrarItem(item.id); repintar(); },

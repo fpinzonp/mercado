@@ -37,19 +37,21 @@ test('en Éxito el arroz va a "más barato en otro mercado" y tachar registra É
   const otros = raiz.querySelector('details.otros');
   expect(otros.querySelector('summary').textContent).toContain('Más barato en otro mercado (1)');
   expect(otros.textContent).toContain('D1');
-  expect(otros.textContent).toContain('$600');
+  expect(otros.textContent).toContain('7% más caro');
   otros.querySelector('input[type=checkbox]').click();
   await vi.waitFor(async () => expect((await repo.listarItems())[0]).toMatchObject({ id: item.id, tachado: true, compradoEn: exito.id }));
 });
 
-test('en D1 el arroz está en "cómpralo aquí" con su costo', async () => {
+test('en D1 el arroz está en "cómpralo aquí" con el precio del paquete y por gramo, sin cantidad', async () => {
   const { repo, ctx, d1 } = await escenario();
   await repo.guardarAjuste('mercadoActivo', d1.id);
   const raiz = document.createElement('div');
   await pintarComprar(raiz, ctx);
   const aqui = raiz.querySelector('.aqui');
-  expect(aqui.textContent).toContain('Arroz');
-  expect(aqui.textContent).toContain('$9.000');
+  expect(aqui.querySelector('.item-nombre').textContent).toBe('Arroz');
+  expect(aqui.textContent).toContain('$4.500');
+  expect(aqui.textContent).toContain('$4,50/g');
+  expect(aqui.textContent).not.toContain('2 kg');
 });
 
 test('todo tachado muestra mensaje y Terminar borra el mercado activo', async () => {

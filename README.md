@@ -1,6 +1,6 @@
 # Mercado
 
-Lista de mercado y comparador de precios para el iPhone. Le tomas una foto al producto, la app lee su nombre real, anotas el precio en cada mercado y te dice dónde sale más barata la compra según las cantidades que necesitas.
+Lista de mercado y comparador de precios para el iPhone. Le tomas una foto al producto, la app lee su nombre real y su tamaño, anotas el precio en cada mercado y te dice dónde sale más barato por gramo, mililitro o unidad. En **Productos** guardas precios de cosas que no están en la lista de este mes, para saber dónde comprarlas después.
 
 ## Instalar en el iPhone
 
