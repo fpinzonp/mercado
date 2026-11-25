@@ -94,7 +94,8 @@ test('agregar un producto nuevo pide solo el nombre y lo crea sin tipo de medida
   expect(raiz.querySelector('#cantidad')).toBeNull();
   buscarEn(raiz, 'Leche');
   raiz.querySelector('[data-crear]').click();
-  await vi.waitFor(() => expect(ctx.ir).toHaveBeenCalledWith('#/lista'));
+  await vi.waitFor(async () => expect(await repo.listarItems()).toHaveLength(1));
+  expect(ctx.ir).not.toHaveBeenCalled();
   const [p] = await repo.listarProductos();
   expect(p.nombre).toBe('Leche');
   expect(p.tipoUnidad).toBeUndefined();
@@ -112,7 +113,7 @@ test('agregar a la lista un producto del catálogo lo reutiliza', async () => {
   buscarEn(raiz, 'cafe');
   expect(raiz.querySelector('[data-crear]')).toBeNull();
   raiz.querySelector(`[data-producto="${cafe.id}"]`).click();
-  await vi.waitFor(() => expect(ctx.ir).toHaveBeenCalledWith('#/lista'));
+  await vi.waitFor(async () => expect(await repo.listarItems()).toHaveLength(1));
   expect(await repo.listarProductos()).toHaveLength(1);
   expect((await repo.listarItems()).map((i) => i.productoId)).toEqual([cafe.id]);
 });
@@ -125,7 +126,7 @@ test('agregar un producto que ya está en la lista no lo duplica', async () => {
   const boton = raiz.querySelector(`[data-producto="${arroz.id}"]`);
   expect(boton.textContent).toContain('ya está en la lista');
   boton.click();
-  await vi.waitFor(() => expect(ctx.ir).toHaveBeenCalledWith('#/lista'));
+  await vi.waitFor(() => expect(raiz.textContent).toContain("Ya estaba en la lista"));
   expect(await repo.listarItems()).toHaveLength(1);
 });
 
@@ -140,4 +141,66 @@ test('agregar: se puede cancelar sin elegir nada y vuelve a la lista sin guardar
   expect(ctx.ir).toHaveBeenCalledWith('#/lista');
   expect(await repo.listarItems()).toHaveLength(1);
   expect(await repo.listarProductos()).toHaveLength(1);
+});
+
+// UX: agregar varios seguidos, Enter, deshacer al quitar, ver solo el precio que importa
+test('agregar varios seguidos: se queda en la pantalla, limpia la búsqueda y Listo vuelve a la lista', async () => {
+  const repo = await abrirDB(`ui-lista-${n++}`);
+  const raiz = document.createElement('div');
+  const ctx = { repo, hoy: () => hoy, ir: vi.fn() };
+  await pintarAgregar(raiz, ctx);
+  buscarEn(raiz, 'Leche');
+  raiz.querySelector('[data-crear]').click();
+  await vi.waitFor(() => expect(raiz.textContent).toContain('Agregaste «Leche»'));
+  expect(raiz.querySelector('#buscar').value).toBe('');
+  buscarEn(raiz, 'Pan');
+  raiz.querySelector('[data-crear]').click();
+  await vi.waitFor(async () => expect(await repo.listarItems()).toHaveLength(2));
+  const listo = [...raiz.querySelectorAll('button')].find((b) => b.textContent === 'Listo');
+  listo.click();
+  expect(ctx.ir).toHaveBeenCalledWith('#/lista');
+});
+
+test('Enter en la búsqueda agrega el producto que coincide o lo crea', async () => {
+  const repo = await abrirDB(`ui-lista-${n++}`);
+  const cafe = await repo.guardarProducto({ nombre: 'Café' });
+  const raiz = document.createElement('div');
+  await pintarAgregar(raiz, { repo, hoy: () => hoy, ir: vi.fn() });
+  buscarEn(raiz, 'café');
+  raiz.querySelector('form.buscar').dispatchEvent(new Event('submit', { cancelable: true }));
+  await vi.waitFor(async () => expect((await repo.listarItems()).map((i) => i.productoId)).toEqual([cafe.id]));
+  buscarEn(raiz, 'Atún');
+  raiz.querySelector('form.buscar').dispatchEvent(new Event('submit', { cancelable: true }));
+  await vi.waitFor(async () => expect(await repo.listarProductos()).toHaveLength(2));
+});
+
+test('quitar de la lista se puede deshacer', async () => {
+  const { repo, ctx, item } = await escenario();
+  const raiz = document.createElement('div');
+  document.body.append(raiz);
+  await pintarLista(raiz, ctx);
+  [...raiz.querySelectorAll('button')].find((b) => b.textContent === 'Quitar').click();
+  await vi.waitFor(async () => expect(await repo.listarItems()).toHaveLength(0));
+  const deshacer = await vi.waitFor(() => {
+    const b = [...document.querySelectorAll('.toast button')].find((x) => x.textContent === 'Deshacer');
+    expect(b).toBeTruthy();
+    return b;
+  });
+  expect(document.querySelector('.toast').textContent).toContain('Quitaste Arroz');
+  deshacer.click();
+  await vi.waitFor(async () => expect((await repo.listarItems()).map((i) => i.id)).toEqual([item.id]));
+  raiz.remove();
+  document.querySelectorAll('.toast').forEach((t) => t.remove());
+});
+
+test('cada producto muestra a la vista solo el precio que importa; los demás se despliegan', async () => {
+  const { ctx } = await escenario();
+  const raiz = document.createElement('div');
+  await pintarLista(raiz, ctx);
+  const item = raiz.querySelector('.item');
+  // Más barato hoy (Ara, por descuento) y el más barato sin descuento (D1) quedan visibles; Éxito va plegado.
+  expect([...item.querySelectorAll(':scope .ofertas > .oferta .donde')].map((d) => d.textContent)).toEqual(['Ara', 'D1']);
+  const mas = item.querySelector('details.mas-precios');
+  expect(mas.querySelector('summary').textContent).toBe('Ver 1 precio más');
+  expect(mas.textContent).toContain('Éxito');
 });

@@ -200,3 +200,19 @@ details.otros summary { font-weight: 700; min-height: 48px; display: flex; align
 .opciones label:has(input:disabled) { opacity: 0.6; cursor: default; }
 .fotos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .fotos .boton { margin: 0; }
+
+/* Más precios plegados, aviso con Deshacer, agregar varios seguidos */
+.ofertas-mas { list-style: none; padding: 0; margin: 0; }
+.mas-precios { margin: 0 0 0 42px; }
+.mas-precios summary { color: var(--verde); font-weight: 600; font-size: 15px; min-height: 44px; display: flex; align-items: center; cursor: pointer; }
+.toast { display: flex; align-items: center; gap: 14px; }
+.toast-accion { background: none; border: 0; color: var(--etiqueta); font: inherit; font-weight: 700; min-height: 44px; padding: 0 4px; cursor: pointer; }
+.agregado:empty { display: none; }
+.agregado { color: var(--verde); font-weight: 600; }
+/* Guardar siempre a mano, encima de la barra inferior */
+.acciones-form {
+  position: sticky; bottom: calc(56px + env(safe-area-inset-bottom)); z-index: 4;
+  display: grid; grid-template-columns: 1fr 2fr; gap: 10px;
+  background: var(--fondo); padding: 10px 0; margin-top: 8px; border-top: 1px solid var(--linea);
+}
+.acciones-form .boton { margin: 0; }

@@ -280,8 +280,10 @@ export async function pintarPrecio(raiz, ctx, params = []) {
     nombre.nodo, selectorTipo, notaTipo, tipoError, tamano.nodo, precio.nodo,
     h('label', { class: 'interruptor', for: 'tiene-descuento' }, tieneDesc, 'Tiene descuento'),
     zonaDesc,
-    h('button', { class: 'boton', type: 'submit' }, 'Guardar precio'),
-    h('button', { class: 'boton secundario', type: 'button', onclick: () => ctx.ir(volverA) }, 'Cancelar'),
+    h('div', { class: 'acciones-form' },
+      h('button', { class: 'boton secundario', type: 'button', onclick: () => ctx.ir(volverA) }, 'Cancelar'),
+      h('button', { class: 'boton', type: 'submit' }, 'Guardar precio'),
+    ),
   );
 
   let guardando = false;

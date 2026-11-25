@@ -1,4 +1,4 @@
-import { h, limpiar, abrirHoja } from './dom.js';
+import { h, limpiar, abrirHoja, aviso } from './dom.js';
 import { cargarEstado } from './estado.js';
 import { compararItem, totalesPorMercado, totalCombinado, descuentoVigente } from '../logica/comparar.js';
 import { formatoCOP, formatoCantidad, formatoUnitario } from '../logica/unidades.js';
@@ -125,17 +125,17 @@ export async function pintarLista(raiz, ctx) {
         h('span', { class: 'item-nombre' }, producto.nombre),
         h('button', {
           class: 'boton-texto peligro', 'aria-label': `Quitar ${producto.nombre} de la lista`,
-          onclick: async () => { await repo.borrarItem(item.id); repintar(); },
+          onclick: async () => {
+            const copia = { ...item };
+            await repo.borrarItem(item.id);
+            repintar();
+            aviso(`Quitaste ${producto.nombre}`, { accion: 'Deshacer', alTocar: async () => { await repo.guardarItem(copia); repintar(); } });
+          },
         }, 'Quitar'),
       ),
       comprado ? h('p', { class: 'comprado-en' }, `Comprado en ${comprado}`) : null,
-      item.tachado ? null : [
-        comp.filas.length ? h('ul', { class: 'ofertas' }, comp.filas.map((fila) => filaOferta(fila, {
-          item, producto, mercado: e.mercadosPorId.get(fila.oferta.mercadoId), soloPorDescuento: comp.soloPorDescuento, hoy,
-          alTocar: (o) => verFoto(repo, o, e.mercadosPorId.get(o.mercadoId)),
-        }))) : null,
-        h('button', { class: 'boton-texto agregar-precio', onclick: () => ctx.ir(`#/precio/${producto.id}`) }, '+ Agregar precio'),
-      ],
+      item.tachado ? null : ofertasDe(comp, { producto, e, hoy, repo }),
+      item.tachado ? null : h('button', { class: 'boton-texto agregar-precio', onclick: () => ctx.ir(`#/precio/${producto.id}`) }, '+ Agregar precio'),
     );
   })));
 
@@ -143,6 +143,27 @@ export async function pintarLista(raiz, ctx) {
     h('button', { class: 'boton', onclick: () => ctx.ir('#/agregar') }, 'Agregar producto'),
     h('button', { class: 'boton secundario', onclick: () => preguntarNuevaLista(repo, repintar) }, 'Nueva lista'),
   ));
+}
+
+/**
+ * A la vista solo lo que importa en el mercado: el más barato (y el más barato sin descuento si gana por promo).
+ * El resto de precios queda plegado.
+ */
+function ofertasDe(comp, { producto, e, hoy, repo }) {
+  if (!comp.filas.length) return null;
+  const fila = (f) => filaOferta(f, {
+    producto, mercado: e.mercadosPorId.get(f.oferta.mercadoId), soloPorDescuento: comp.soloPorDescuento, hoy,
+    alTocar: (o) => verFoto(repo, o, e.mercadosPorId.get(o.mercadoId)),
+  });
+  const visibles = comp.filas.filter((f, i) => i === 0 || f.esMasBaratoHoy || (comp.soloPorDescuento && f.esMasBaratoNormal));
+  const resto = comp.filas.filter((f) => !visibles.includes(f));
+  return [
+    h('ul', { class: 'ofertas' }, visibles.map(fila)),
+    resto.length ? h('details', { class: 'mas-precios' },
+      h('summary', {}, `Ver ${resto.length} ${resto.length === 1 ? 'precio más' : 'precios más'}`),
+      h('ul', { class: 'ofertas-mas' }, resto.map(fila)),
+    ) : null,
+  ];
 }
 
 function preguntarMercado({ item, producto, comp, e, repo, alTerminar }) {

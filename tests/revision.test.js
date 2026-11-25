@@ -97,7 +97,7 @@ test('agregar un producto que estaba tachado lo destacha', async () => {
   b.value = 'arroz';
   b.dispatchEvent(new Event('input'));
   raiz.querySelector(`[data-producto="${arroz.id}"]`).click();
-  await vi.waitFor(() => expect(ctx.ir).toHaveBeenCalled());
+  await vi.waitFor(async () => expect((await repo.listarItems())[0].tachado).toBe(false));
   const items = await repo.listarItems();
   expect(items).toHaveLength(1);
   expect(items[0]).toMatchObject({ tachado: false });

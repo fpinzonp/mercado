@@ -74,8 +74,13 @@ export function abrirHoja(titulo, contenido) {
   return cerrar;
 }
 
-export function aviso(texto) {
+/** Aviso breve abajo. Con `accion` muestra un botón (p. ej. Deshacer) y dura más. */
+export function aviso(texto, { accion, alTocar } = {}) {
+  for (const viejo of document.querySelectorAll('.toast')) viejo.remove();
   const t = h('div', { class: 'toast', role: 'status' }, texto);
+  if (accion) {
+    t.append(h('button', { class: 'toast-accion', type: 'button', onclick: () => { t.remove(); alTocar?.(); } }, accion));
+  }
   document.body.append(t);
-  setTimeout(() => t.remove(), 3500);
+  setTimeout(() => t.remove(), accion ? 6000 : 3500);
 }
