@@ -3,6 +3,7 @@ import { abrirDB } from './datos/db.js';
 import { hoyLocal } from './logica/fechas.js';
 import { iniciarRouter } from './ui/router.js';
 import { estaInstalada, esIOS } from './ui/estado.js';
+import { redireccion } from './ui/guardian.js';
 import { pintarBienvenida } from './ui/vista-bienvenida.js';
 import { pintarAjustes } from './ui/vista-ajustes.js';
 
@@ -29,11 +30,12 @@ async function arrancar() {
 
   // Antes de pintar cualquier vista: instalar (iPhone) y crear mercados.
   const guardian = async (nombre, vista) => async (r, c, p) => {
-    if (nombre !== 'bienvenida') {
-      if (esIOS() && !estaInstalada() && !sessionStorage.getItem('sinInstalar')) {
-        return pintarBienvenida(r, c, ['instalar']);
-      }
-      if (!(await repo.listarMercados()).length) return pintarBienvenida(r, c, ['mercados']);
+    const ir = await redireccion({
+      vista: nombre, repo, esIOS: esIOS(), instalada: estaInstalada(), sinInstalar: Boolean(sessionStorage.getItem('sinInstalar')),
+    });
+    if (ir) {
+      document.body.dataset.vista = 'bienvenida';
+      return pintarBienvenida(r, c, ir);
     }
     return vista(r, c, p);
   };

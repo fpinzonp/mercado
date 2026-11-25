@@ -26,3 +26,25 @@ test('sin ningún mercado muestra error y no guarda', async () => {
   expect(ctx.ir).not.toHaveBeenCalled();
   expect(raiz.textContent).toContain('Escribe al menos un mercado');
 });
+
+test('en un dispositivo nuevo se puede ir a entrar con la cuenta sin crear mercados', async () => {
+  const repo = await abrirDB('ui-bienvenida-3');
+  const raiz = document.createElement('div');
+  const ctx = { repo, ir: vi.fn() };
+  await pintarBienvenida(raiz, ctx, ['mercados']);
+  [...raiz.querySelectorAll('button')].find((b) => b.textContent === 'Ya uso Mercado en otro dispositivo').click();
+  expect(ctx.ir).toHaveBeenCalledWith('#/ajustes');
+});
+
+test('guardián: sin mercados manda a crearlos, salvo en Ajustes (para entrar y bajar los datos)', async () => {
+  const { redireccion } = await import('../../src/ui/guardian.js');
+  const repo = await abrirDB('ui-bienvenida-4');
+  const base = { repo, esIOS: false, instalada: false, sinInstalar: false };
+  expect(await redireccion({ ...base, vista: 'lista' })).toEqual(['mercados']);
+  expect(await redireccion({ ...base, vista: 'ajustes' })).toBeNull();
+  expect(await redireccion({ ...base, vista: 'bienvenida' })).toBeNull();
+  expect(await redireccion({ ...base, vista: 'ajustes', esIOS: true })).toEqual(['instalar']);
+  expect(await redireccion({ ...base, vista: 'ajustes', esIOS: true, sinInstalar: true })).toBeNull();
+  await repo.guardarMercado({ nombre: 'D1' });
+  expect(await redireccion({ ...base, vista: 'lista' })).toBeNull();
+});

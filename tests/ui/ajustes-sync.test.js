@@ -98,3 +98,15 @@ test('sin señal lo dice sin alarmar', async () => {
   boton(raiz, 'Sincronizar ahora').click();
   await vi.waitFor(() => expect(raiz.textContent).toContain('Sin señal: tus cambios quedan guardados en el teléfono'));
 });
+
+test('después de entrar, si bajaron mercados de la nube, lleva a la lista', async () => {
+  const nube = nubeFalsa();
+  let repoRef;
+  const sync = { correr: vi.fn(async () => { await repoRef.guardarMercado({ nombre: 'D1' }); return { ok: true, bajados: 5, subidos: 0 }; }) };
+  const { raiz, ctx } = await pintar(nube, sync);
+  repoRef = ctx.repo;
+  escribir(raiz, '#correo', 'yo@correo.com');
+  escribir(raiz, '#clave', 'secreta123');
+  boton(raiz, 'Entrar').click();
+  await vi.waitFor(() => expect(ctx.ir).toHaveBeenCalledWith('#/lista'));
+});

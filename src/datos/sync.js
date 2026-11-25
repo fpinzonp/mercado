@@ -71,16 +71,18 @@ async function aplicar(repo, tabla, f, alias) {
     if (tabla === 'ofertas' && local.fotoId) await db.delete('fotos', local.fotoId);
     return true;
   }
-  if (tabla === 'productos' && alias[f.id]) {
-    await repo.pendiente('productos', f.id); // ya se unió a otro: vuelve a quedar borrado
+  if ((tabla === 'productos' || tabla === 'mercados') && alias[f.id]) {
+    await repo.pendiente(tabla, f.id); // ya se unió a otro: vuelve a quedar borrado
     return false;
   }
 
   let r = { ...f.datos, id: f.id, actualizadoEn: f.actualizado_en };
   let reescrito = false;
-  if ((tabla === 'ofertas' || tabla === 'lista') && alias[r.productoId]) {
-    r = { ...r, productoId: alias[r.productoId], actualizadoEn: Date.now() };
-    reescrito = true;
+  for (const campo of ['productoId', 'mercadoId', 'compradoEn']) {
+    if ((tabla === 'ofertas' || tabla === 'lista') && r[campo] && alias[r[campo]]) {
+      r = { ...r, [campo]: alias[r[campo]], actualizadoEn: Date.now() };
+      reescrito = true;
+    }
   }
   // Un solo precio por producto y mercado, y un solo ítem por producto en la lista: gana el más nuevo.
   const otra = tabla === 'ofertas'
@@ -99,8 +101,52 @@ async function aplicar(repo, tabla, f, alias) {
   return true;
 }
 
+/** Une mercados con el mismo nombre: los precios y lo comprado pasan al que queda (el de id menor). */
+async function unirMercados(repo, alias) {
+  const { db } = repo;
+  const grupos = new Map();
+  for (const m of await db.getAll('mercados')) {
+    const k = normalizarNombre(m.nombre);
+    if (!grupos.has(k)) grupos.set(k, []);
+    grupos.get(k).push(m);
+  }
+  const ahora = Date.now();
+  for (const grupo of grupos.values()) {
+    if (grupo.length < 2) continue;
+    grupo.sort((a, b) => (a.id < b.id ? -1 : 1));
+    const [gana, ...pierden] = grupo;
+    for (const m of pierden) {
+      alias[m.id] = gana.id;
+      for (const o of await db.getAllFromIndex('ofertas', 'porMercado', m.id)) {
+        const ya = await db.getFromIndex('ofertas', 'porProductoMercado', [o.productoId, gana.id]);
+        if (ya && (ya.actualizadoEn ?? 0) >= (o.actualizadoEn ?? 0)) {
+          await db.delete('ofertas', o.id);
+          await repo.pendiente('ofertas', o.id);
+          continue;
+        }
+        if (ya) {
+          await db.delete('ofertas', ya.id);
+          await repo.pendiente('ofertas', ya.id);
+        }
+        await db.put('ofertas', { ...o, mercadoId: gana.id, actualizadoEn: ahora });
+        await repo.pendiente('ofertas', o.id);
+      }
+      for (const i of (await db.getAll('lista')).filter((x) => x.compradoEn === m.id)) {
+        await db.put('lista', { ...i, compradoEn: gana.id, actualizadoEn: ahora });
+        await repo.pendiente('lista', i.id);
+      }
+      for (const clave of ['mercadoActivo', 'ultimoMercadoPrecio']) {
+        if ((await repo.leerAjuste(clave)) === m.id) await repo.guardarAjuste(clave, gana.id);
+      }
+      await db.delete('mercados', m.id);
+      await repo.pendiente('mercados', m.id);
+    }
+  }
+}
+
 /** Une productos con el mismo nombre (sin mayúsculas, tildes ni espacios de más): gana el de id menor en todos los dispositivos. */
 async function unirRepetidos(repo, alias) {
+  await unirMercados(repo, alias);
   const { db } = repo;
   const grupos = new Map();
   for (const p of await db.getAll('productos')) {

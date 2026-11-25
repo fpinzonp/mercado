@@ -192,3 +192,29 @@ test('normalizarNombre ignora mayúsculas, tildes y espacios de más', () => {
   expect(normalizarNombre('  Café   Sello ')).toBe('cafe sello');
   expect(normalizarNombre('ARROZ')).toBe(normalizarNombre('arroz'));
 });
+
+test('mercados con el mismo nombre en dos dispositivos se unen sin perder precios', async () => {
+  const nube = new NubeFalsa();
+  const a = await nuevoRepo();
+  const b = await nuevoRepo();
+  const d1a = await a.guardarMercado({ nombre: 'D1' });
+  const arroz = await a.guardarProducto({ id: 'p-arroz', nombre: 'Arroz', tipoUnidad: 'g' });
+  await a.guardarOferta({ productoId: arroz.id, mercadoId: d1a.id, nombreReal: 'Arroz Diana', tamano: 1000, precioNormal: 4500 }, hoy);
+  await sincronizar(a, nube);
+  const d1b = await b.guardarMercado({ nombre: ' d1 ' });
+  const ara = await b.guardarMercado({ nombre: 'Ara' });
+  const item = await b.guardarItem({ productoId: 'p-arroz' });
+  await b.tacharItem(item.id, d1b.id);
+  await b.guardarAjuste('mercadoActivo', d1b.id);
+  await sincronizar(b, nube);
+  await sincronizar(a, nube);
+  for (const repo of [a, b]) {
+    const mercados = await repo.listarMercados();
+    expect(mercados.map((m) => m.nombre.toLowerCase()).sort()).toEqual(['ara', 'd1']);
+    const d1 = mercados.find((m) => m.nombre.trim().toLowerCase() === 'd1');
+    expect((await repo.ofertasPorProducto()).get('p-arroz')[0].mercadoId).toBe(d1.id);
+    expect((await repo.listarItems())[0].compradoEn).toBe(d1.id);
+  }
+  expect(await b.leerAjuste('mercadoActivo')).toBe((await b.listarMercados()).find((m) => m.nombre.trim().toLowerCase() === 'd1').id);
+  void ara;
+});

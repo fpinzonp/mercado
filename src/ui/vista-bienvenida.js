@@ -41,6 +41,8 @@ function pasoMercados(raiz, ctx) {
     h('p', {}, 'Escribe los mercados donde comparas precios. Puedes cambiarlos después en Ajustes.'),
     campos.map((c) => c.nodo),
     h('button', { class: 'boton', type: 'submit' }, 'Guardar mercados'),
+    h('button', { class: 'boton secundario', type: 'button', onclick: () => ctx.ir('#/ajustes') }, 'Ya uso Mercado en otro dispositivo'),
+    h('p', { class: 'ayuda' }, 'Entra con tu cuenta y se bajan tus mercados, productos, precios y lista.'),
   );
   campos[0].input.addEventListener('input', () => campos[0].mostrarError(''));
   form.addEventListener('submit', async (e) => {

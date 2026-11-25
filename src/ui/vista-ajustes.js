@@ -109,10 +109,19 @@ async function seccionDispositivos(ctx) {
       }
       ocupado = false;
     };
+    // Primera vez en este dispositivo: baja los datos y, si ya hay mercados, lleva a la lista.
+    const despuesDeEntrar = async () => {
+      estado.textContent = 'Bajando tus datos…';
+      const r = await ctx.sync?.correr();
+      if ((await ctx.repo.listarMercados()).length && r?.ok) {
+        aviso('Listo: tus datos están en este dispositivo');
+        ctx.ir('#/lista');
+      }
+    };
     const entrar = accion(async ({ email, pass }) => {
       await nube.entrar(email, pass);
       await pintar();
-      ctx.sync?.correr();
+      await despuesDeEntrar();
     });
     const crear = accion(async ({ email, pass }) => {
       const { necesitaConfirmar } = await nube.crearCuenta(email, pass);
@@ -121,7 +130,7 @@ async function seccionDispositivos(ctx) {
         return;
       }
       await pintar();
-      ctx.sync?.correr();
+      await despuesDeEntrar();
     });
     seccion.append(
       h('p', {}, 'Entra con tu correo para tener la misma lista, precios y fotos en todos tus dispositivos. Sin señal la app sigue funcionando y sube los cambios después.'),
