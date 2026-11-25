@@ -13,7 +13,7 @@ afterEach(() => vi.restoreAllMocks());
 /** Servidor falso con las mismas reglas que supabase/esquema.sql. */
 class NubeFalsa {
   constructor() {
-    this.tablas = { mercados: new Map(), productos: new Map(), ofertas: new Map(), lista: new Map() };
+    this.tablas = { mercados: new Map(), productos: new Map(), ofertas: new Map(), lista: new Map(), compras: new Map() };
     this.fotos = new Map();
     this.reloj = 0;
     this.caida = false;
@@ -217,4 +217,40 @@ test('mercados con el mismo nombre en dos dispositivos se unen sin perder precio
   }
   expect(await b.leerAjuste('mercadoActivo')).toBe((await b.listarMercados()).find((m) => m.nombre.trim().toLowerCase() === 'd1').id);
   void ara;
+});
+
+test('el historial de compras viaja entre dispositivos y sigue a los productos unidos', async () => {
+  const nube = new NubeFalsa();
+  const a = await nuevoRepo();
+  const b = await nuevoRepo();
+  const d1 = await a.guardarMercado({ id: 'm-d1', nombre: 'D1' });
+  const cafeA = await a.guardarProducto({ id: 'p-z', nombre: 'Café' });
+  await a.guardarOferta({ productoId: cafeA.id, mercadoId: d1.id, tamano: 500, precioNormal: 15000 }, hoy);
+  const item = await a.guardarItem({ productoId: cafeA.id });
+  await a.tacharItem(item.id, d1.id, hoy);
+  await sincronizar(a, nube);
+  await b.guardarProducto({ id: 'p-a', nombre: 'cafe' });
+  await sincronizar(b, nube);
+  await sincronizar(a, nube);
+  for (const repo of [a, b]) {
+    const [c] = await repo.listarCompras();
+    expect(c).toMatchObject({ productoId: 'p-a', mercadoId: 'm-d1', precio: 15000, conDescuento: false });
+  }
+});
+
+test('si el servidor todavía no tiene una tabla, lo demás se sincroniza igual', async () => {
+  const nube = new NubeFalsa();
+  delete nube.tablas.compras;
+  const original = nube.bajar.bind(nube);
+  const sinTabla = () => Object.assign(new Error('relation does not exist'), { tablaFalta: true });
+  nube.bajar = async (t, d) => { if (!nube.tablas[t]) throw sinTabla(); return original(t, d); };
+  const subirOriginal = nube.subir.bind(nube);
+  nube.subir = async (t, f) => { if (!nube.tablas[t]) throw sinTabla(); return subirOriginal(t, f); };
+  const repo = await nuevoRepo();
+  const { item, d1 } = await conDatos(repo);
+  await repo.tacharItem(item.id, d1.id, hoy);
+  const r = await sincronizar(repo, nube);
+  expect(r.ok).toBe(true);
+  expect(nube.vivos('ofertas')).toHaveLength(1);
+  expect(await repo.db.count('pendientes')).toBe(1); // la compra espera a que exista la tabla
 });

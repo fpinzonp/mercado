@@ -25,7 +25,7 @@ end $$;
 do $$
 declare t text;
 begin
-  foreach t in array array['mercados', 'productos', 'ofertas', 'lista'] loop
+  foreach t in array array['mercados', 'productos', 'ofertas', 'lista', 'compras'] loop
     execute format($f$
       create table if not exists public.%1$I (
         id text primary key,

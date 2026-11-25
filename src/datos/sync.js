@@ -28,15 +28,22 @@ async function hacer(repo, nube) {
 
     const desde = (await repo.leerAjuste('syncDesde')) ?? {};
     const alias = (await repo.leerAjuste('syncAlias')) ?? {};
+    // Una tabla que el servidor todavía no tiene (esquema sin actualizar) se salta; lo demás sigue.
+    const faltan = new Set();
     for (const tabla of TABLAS_SYNC) {
-      const { filas, hasta } = await nube.bajar(tabla, desde[tabla] ?? null);
-      for (const f of filas) cuenta.bajados += (await aplicar(repo, tabla, f, alias)) ? 1 : 0;
-      desde[tabla] = hasta;
+      try {
+        const { filas, hasta } = await nube.bajar(tabla, desde[tabla] ?? null);
+        for (const f of filas) cuenta.bajados += (await aplicar(repo, tabla, f, alias)) ? 1 : 0;
+        desde[tabla] = hasta;
+      } catch (e) {
+        if (!e?.tablaFalta) throw e;
+        faltan.add(tabla);
+      }
     }
     await unirRepetidos(repo, alias);
     await repo.guardarAjuste('syncAlias', alias);
 
-    for (const tabla of TABLAS_SYNC) cuenta.subidos += await subirTabla(repo, nube, tabla);
+    for (const tabla of TABLAS_SYNC) if (!faltan.has(tabla)) cuenta.subidos += await subirTabla(repo, nube, tabla);
     await bajarFotos(repo, nube);
 
     await repo.guardarAjuste('syncDesde', desde);
@@ -79,7 +86,7 @@ async function aplicar(repo, tabla, f, alias) {
   let r = { ...f.datos, id: f.id, actualizadoEn: f.actualizado_en };
   let reescrito = false;
   for (const campo of ['productoId', 'mercadoId', 'compradoEn']) {
-    if ((tabla === 'ofertas' || tabla === 'lista') && r[campo] && alias[r[campo]]) {
+    if (['ofertas', 'lista', 'compras'].includes(tabla) && r[campo] && alias[r[campo]]) {
       r = { ...r, [campo]: alias[r[campo]], actualizadoEn: Date.now() };
       reescrito = true;
     }
@@ -131,6 +138,10 @@ async function unirMercados(repo, alias) {
         await db.put('ofertas', { ...o, mercadoId: gana.id, actualizadoEn: ahora });
         await repo.pendiente('ofertas', o.id);
       }
+      for (const c of (await db.getAll('compras')).filter((x) => x.mercadoId === m.id)) {
+        await db.put('compras', { ...c, mercadoId: gana.id, actualizadoEn: ahora });
+        await repo.pendiente('compras', c.id);
+      }
       for (const i of (await db.getAll('lista')).filter((x) => x.compradoEn === m.id)) {
         await db.put('lista', { ...i, compradoEn: gana.id, actualizadoEn: ahora });
         await repo.pendiente('lista', i.id);
@@ -180,6 +191,10 @@ async function unirRepetidos(repo, alias) {
         }
         await db.put('ofertas', { ...o, productoId: gana.id, actualizadoEn: ahora });
         await repo.pendiente('ofertas', o.id);
+      }
+      for (const c of await db.getAllFromIndex('compras', 'porProducto', p.id)) {
+        await db.put('compras', { ...c, productoId: gana.id, actualizadoEn: ahora });
+        await repo.pendiente('compras', c.id);
       }
       const lista = await db.getAll('lista');
       for (const i of lista.filter((x) => x.productoId === p.id)) {

@@ -1,9 +1,10 @@
 import { openDB, deleteDB } from 'idb';
 import { fusionarOferta } from '../logica/ofertas.js';
 import { hoyLocal } from '../logica/fechas.js';
+import { precioEfectivo } from '../logica/comparar.js';
 
-const VERSION = 2;
-export const TABLAS_SYNC = ['mercados', 'productos', 'ofertas', 'lista'];
+const VERSION = 3;
+export const TABLAS_SYNC = ['mercados', 'productos', 'ofertas', 'lista', 'compras'];
 const DEFAULTS = {};
 // randomUUID solo existe en contexto seguro (https); en http de la red local se arma a mano.
 const nuevoId = () => {
@@ -25,6 +26,8 @@ export async function abrirDB(nombre = 'mercado') {
       if (viejaVersion < 1) crearAlmacenes(db);
       // v2: cambios pendientes de subir a la nube (también los borrados).
       if (viejaVersion < 2) db.createObjectStore('pendientes', { keyPath: 'clave' });
+      // v3: historial de compras (no se borra al empezar una lista nueva).
+      if (viejaVersion < 3) db.createObjectStore('compras', { keyPath: 'id' }).createIndex('porProducto', 'productoId');
     },
   });
   function crearAlmacenes(db) {
@@ -154,15 +157,32 @@ export async function abrirDB(nombre = 'mercado') {
       await pendiente('lista', id);
       await marcarCambio();
     },
-    async tacharItem(id, mercadoId) {
+    /** Tacha o destacha. Al tachar en un mercado guarda la compra (precio pagado y si tenía descuento). */
+    async tacharItem(id, mercadoId, hoy = hoyLocal()) {
       const item = await db.get('lista', id);
       if (!item) return undefined;
       if (item.tachado) {
         item.tachado = false;
         delete item.compradoEn;
+        if (item.compraId) {
+          await db.delete('compras', item.compraId); // destachar = fue un error: esa compra no pasó
+          await pendiente('compras', item.compraId);
+          delete item.compraId;
+        }
       } else {
         item.tachado = true;
-        if (mercadoId) item.compradoEn = mercadoId;
+        if (mercadoId) {
+          item.compradoEn = mercadoId;
+          const oferta = await db.getFromIndex('ofertas', 'porProductoMercado', [item.productoId, mercadoId]);
+          const pagado = oferta?.precioNormal > 0 ? precioEfectivo(oferta, hoy) : null;
+          const compra = sellar({
+            id: nuevoId(), productoId: item.productoId, mercadoId, fecha: hoy,
+            precio: pagado?.precio ?? null, precioNormal: oferta?.precioNormal ?? null, conDescuento: pagado?.conDescuento ?? false,
+          });
+          await db.put('compras', compra);
+          await pendiente('compras', compra.id);
+          item.compraId = compra.id;
+        }
       }
       item.actualizadoEn = Date.now();
       await db.put('lista', item);
@@ -179,6 +199,7 @@ export async function abrirDB(nombre = 'mercado') {
         } else {
           item.tachado = false;
           delete item.compradoEn;
+          delete item.compraId; // la compra queda en el historial
           item.actualizadoEn = Date.now();
           await lista.put(item);
         }
@@ -186,6 +207,11 @@ export async function abrirDB(nombre = 'mercado') {
       }
       await tx.done;
       await marcarCambio();
+    },
+
+    // Historial de compras
+    async listarCompras() {
+      return (await db.getAll('compras')).sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : (b.actualizadoEn ?? 0) - (a.actualizadoEn ?? 0)));
     },
 
     // Ajustes
@@ -199,7 +225,7 @@ export async function abrirDB(nombre = 'mercado') {
 
     async borrarTodo() {
       // Solo este teléfono: no anota borrados para la nube.
-      const almacenes = ['mercados', 'productos', 'ofertas', 'fotos', 'lista', 'pendientes'];
+      const almacenes = ['mercados', 'productos', 'ofertas', 'fotos', 'lista', 'compras', 'pendientes'];
       const tx = db.transaction([...almacenes, 'ajustes'], 'readwrite');
       for (const a of almacenes) await tx.objectStore(a).clear();
       await tx.objectStore('ajustes').clear(); // también la sesión de sincronización de este teléfono

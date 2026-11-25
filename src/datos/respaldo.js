@@ -30,6 +30,7 @@ export async function exportarRespaldo(repo) {
     productos: await db.getAll('productos'),
     ofertas,
     lista: await db.getAll('lista'),
+    compras: await db.getAll('compras'),
     fotos,
   };
 }
@@ -39,10 +40,10 @@ const tieneId = (r) => r && typeof r === 'object' && typeof r.id === 'string' &&
 
 /** Valida y prepara todo ANTES de tocar la base: un archivo dañado nunca borra datos. */
 function prepararRespaldo(datos) {
-  const listas = ['mercados', 'productos', 'ofertas', 'lista', 'fotos'];
+  const listas = ['mercados', 'productos', 'ofertas', 'lista', 'compras', 'fotos'];
   if (!datos || datos.version !== 1 || !listas.every((k) => Array.isArray(datos[k] ?? []))) throw new Error(NO_ES_RESPALDO);
   const r = {};
-  for (const a of ['mercados', 'productos', 'ofertas', 'lista']) {
+  for (const a of ['mercados', 'productos', 'ofertas', 'lista', 'compras']) {
     r[a] = datos[a] ?? [];
     if (!r[a].every(tieneId)) throw new Error(NO_ES_RESPALDO);
   }
@@ -61,8 +62,8 @@ function prepararRespaldo(datos) {
 
 export async function importarRespaldo(repo, datos) {
   const listo = prepararRespaldo(datos);
-  const almacenes = ['mercados', 'productos', 'ofertas', 'lista', 'fotos'];
-  const conSync = ['mercados', 'productos', 'ofertas', 'lista'];
+  const almacenes = ['mercados', 'productos', 'ofertas', 'lista', 'compras', 'fotos'];
+  const conSync = ['mercados', 'productos', 'ofertas', 'lista', 'compras'];
   const tx = repo.db.transaction([...almacenes, 'pendientes'], 'readwrite');
   const ahora = Date.now();
   const pendiente = (tabla, id) => tx.objectStore('pendientes').put({ clave: `${tabla}:${id}`, tabla, id });

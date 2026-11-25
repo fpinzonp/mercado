@@ -8,7 +8,10 @@ const SOLAPE_MS = 60_000; // se vuelve a bajar el último minuto por si algo se 
 const PAGINA = 1000;
 
 const errorDe = (e) => Object.assign(new Error(e?.message ?? 'Error de Supabase'), {
-  codigo: e?.code, sinRed: /fetch|network/i.test(e?.message ?? ''),
+  codigo: e?.code,
+  sinRed: /fetch|network/i.test(e?.message ?? ''),
+  // El esquema del servidor todavía no tiene esa tabla (falta correr supabase/esquema.sql actualizado).
+  tablaFalta: e?.code === 'PGRST205' || e?.code === '42P01' || /could not find the table|does not exist/i.test(e?.message ?? ''),
 });
 
 /** Nube para sync.js, más el inicio de sesión con código por correo. */
