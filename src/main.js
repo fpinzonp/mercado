@@ -49,6 +49,12 @@ async function arrancar() {
     console.warn('No se pudo cargar la cuenta', e);
   }
 
+  // Con sesión pero sin datos en este dispositivo: bajar primero lo de la nube (máximo 8 s, por si no hay señal),
+  // para no pedir crear mercados que ya existen.
+  if (nube && ctx.sync && (await nube.conectado().catch(() => false)) && !(await repo.listarMercados()).length) {
+    await Promise.race([ctx.sync.correr(), new Promise((r) => setTimeout(r, 8000))]);
+  }
+
   // Antes de pintar cualquier vista: instalar (iPhone), entrar con la cuenta y crear mercados.
   const guardian = (nombre, vista) => async (r, c, p) => {
     const ir = await redireccion({

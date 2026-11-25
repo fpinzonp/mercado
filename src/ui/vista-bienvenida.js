@@ -52,7 +52,18 @@ async function pasoCuenta(raiz, ctx) {
   ));
 }
 
-function pasoMercados(raiz, ctx) {
+async function pasoMercados(raiz, ctx) {
+  const nube = await ctx.obtenerNube?.().catch(() => null);
+  const cuenta = nube ? await nube.cuenta().catch(() => null) : null;
+  if (cuenta) {
+    raiz.append(h('p', { class: 'ayuda cuenta-actual' },
+      `Entraste como ${cuenta.email}. `,
+      h('button', {
+        class: 'boton-texto', type: 'button',
+        onclick: async () => { await nube.salir(); await ctx.repo.borrarTodo(); ctx.ir('#/bienvenida/cuenta'); },
+      }, 'No soy yo: cerrar sesión'),
+    ));
+  }
   const campos = [1, 2, 3, 4].map((n) => campo({
     etiqueta: `Mercado ${n}${n > 1 ? ' (opcional)' : ''}`,
     id: `mercado-${n}`,

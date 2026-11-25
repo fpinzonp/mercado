@@ -107,3 +107,15 @@ test('contraseña equivocada y datos inválidos muestran errores claros', async 
   boton(raiz, 'Entrar').click();
   await vi.waitFor(() => expect(raiz.textContent).toContain('Correo o contraseña incorrectos'));
 });
+
+test('crear mercados dice con qué cuenta entraste y deja cerrar sesión', async () => {
+  const repo = await abrirDB('ui-bienvenida-cuenta-mercados');
+  const nube = { cuenta: vi.fn(async () => ({ email: 'yo@correo.com' })), salir: vi.fn(async () => {}) };
+  const ctx = { repo, ir: vi.fn(), obtenerNube: async () => nube };
+  const raiz = document.createElement('div');
+  await pintarBienvenida(raiz, ctx, ['mercados']);
+  expect(raiz.textContent).toContain('Entraste como yo@correo.com');
+  [...raiz.querySelectorAll('button')].find((b) => b.textContent === 'No soy yo: cerrar sesión').click();
+  await vi.waitFor(() => expect(ctx.ir).toHaveBeenCalledWith('#/bienvenida/cuenta'));
+  expect(nube.salir).toHaveBeenCalled();
+});
