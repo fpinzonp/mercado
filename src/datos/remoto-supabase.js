@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 // La seguridad la ponen las reglas de la base (cada usuario solo ve sus filas): ver supabase/esquema.sql.
 export const SUPABASE_URL = 'https://ycyurqnghgpdpqeuxtke.supabase.co';
 export const SUPABASE_CLAVE = 'sb_publishable_-313rz240qB2ie2Kgv3UlQ_tPW_NkIu';
+const APP_URL = 'https://fpinzonp.github.io/mercado/';
 
 const SOLAPE_MS = 60_000; // se vuelve a bajar el último minuto por si algo se guardó al mismo tiempo
 const PAGINA = 1000;
@@ -30,13 +31,15 @@ export function crearNube(sb = createClient(SUPABASE_URL, SUPABASE_CLAVE, {
       return u ? { email: u.email } : null;
     },
     async conectado() { return Boolean(await usuario()); },
-    async enviarCodigo(email) {
-      const { error } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
+    async entrar(email, password) {
+      const { error } = await sb.auth.signInWithPassword({ email, password });
       if (error) throw errorDe(error);
     },
-    async verificarCodigo(email, token) {
-      const { error } = await sb.auth.verifyOtp({ email, token, type: 'email' });
+    /** Si el proyecto pide confirmar el correo, no hay sesión hasta que se toque el enlace. */
+    async crearCuenta(email, password) {
+      const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: APP_URL } });
       if (error) throw errorDe(error);
+      return { necesitaConfirmar: !data.session };
     },
     async salir() { await sb.auth.signOut(); },
 

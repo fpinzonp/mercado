@@ -38,6 +38,6 @@ Se publica en GitHub Pages con cada push a `main` (`.github/workflows/deploy.yml
 
 ## Sincronizar entre dispositivos (Supabase gratis)
 
-**Ajustes → Tus dispositivos**: entras con tu correo y un código de 6 dígitos. Desde ahí la lista, los precios y las fotos se sincronizan solos entre todos tus dispositivos. Sin señal todo sigue funcionando en el teléfono y se sube después. Si dos dispositivos cambian lo mismo, gana el cambio más reciente; los productos con el mismo nombre (sin importar mayúsculas, tildes ni espacios) se unen en uno.
+**Ajustes → Tus dispositivos**: entras con tu correo y una contraseña. Desde ahí la lista, los precios y las fotos se sincronizan solos entre todos tus dispositivos. Sin señal todo sigue funcionando en el teléfono y se sube después. Si dos dispositivos cambian lo mismo, gana el cambio más reciente; los productos con el mismo nombre (sin importar mayúsculas, tildes ni espacios) se unen en uno.
 
-Configuración (una sola vez): en Supabase → **SQL Editor** pega y ejecuta `supabase/esquema.sql`. En **Authentication → Emails**, en las plantillas *Magic Link* y *Confirm signup*, agrega el código `{{ .Token }}` para que el correo traiga el número. El flujo `supabase-activo.yml` evita que el proyecto gratis se pause por inactividad.
+Configuración (una sola vez): en Supabase → **SQL Editor** pega y ejecuta `supabase/esquema.sql`. En **Authentication → URL Configuration**, pon como *Site URL* https://fpinzonp.github.io/mercado/ para que el enlace de confirmación de la cuenta abra la app. El flujo `supabase-activo.yml` evita que el proyecto gratis se pause por inactividad.

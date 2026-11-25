@@ -78,60 +78,60 @@ async function seccionDispositivos(ctx) {
     }
 
     const correo = campo({ etiqueta: 'Tu correo', id: 'correo', type: 'email', autocomplete: 'email', inputmode: 'email', placeholder: 'nombre@correo.com' });
+    const clave = campo({ etiqueta: 'Contraseña', id: 'clave', type: 'password', autocomplete: 'current-password', ayuda: 'Al menos 8 caracteres. La misma en todos tus dispositivos.' });
     const estado = h('p', { class: 'ayuda', role: 'status' });
     correo.input.addEventListener('input', () => correo.mostrarError(''));
-    let enviando = false;
-    const enviar = h('button', {
-      class: 'boton', type: 'button',
-      onclick: async () => {
-        const email = correo.input.value.trim();
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { correo.mostrarError('Escribe un correo válido, por ejemplo nombre@correo.com.'); return; }
-        if (enviando) return;
-        enviando = true;
-        estado.textContent = 'Enviando…';
-        try {
-          await nube.enviarCodigo(email);
-          pedirCodigo(email);
-        } catch (e) {
-          estado.textContent = /rate|limit|seconds/i.test(e.message)
-            ? 'Ya se enviaron varios códigos. Espera unos minutos e inténtalo otra vez.'
-            : `No se pudo enviar el código: ${e.message}`;
-        }
-        enviando = false;
-      },
-    }, 'Enviarme un código');
+    clave.input.addEventListener('input', () => clave.mostrarError(''));
+    const validar = () => {
+      const email = correo.input.value.trim();
+      const pass = clave.input.value;
+      const okCorreo = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+      correo.mostrarError(okCorreo ? '' : 'Escribe un correo válido, por ejemplo nombre@correo.com.');
+      clave.mostrarError(pass.length >= 8 ? '' : 'La contraseña debe tener al menos 8 caracteres.');
+      return okCorreo && pass.length >= 8 ? { email, pass } : null;
+    };
+    let ocupado = false;
+    const accion = (fn) => async () => {
+      const datos = validar();
+      if (!datos || ocupado) return;
+      ocupado = true;
+      estado.textContent = 'Un momento…';
+      try {
+        await fn(datos);
+      } catch (e) {
+        const m = e?.message ?? '';
+        estado.textContent = /invalid login|credentials/i.test(m) ? 'Correo o contraseña incorrectos.'
+          : /not confirmed/i.test(m) ? 'Falta confirmar el correo: abre el correo de Supabase y toca el enlace; luego vuelve aquí y toca Entrar.'
+            : /already registered|exists/i.test(m) ? 'Ese correo ya tiene cuenta: toca Entrar.'
+              : /rate|limit|seconds/i.test(m) ? 'Demasiados intentos seguidos. Espera unos minutos.'
+                : /fetch|network/i.test(m) ? 'Sin señal. Inténtalo cuando tengas conexión.'
+                  : `No se pudo: ${m}`;
+      }
+      ocupado = false;
+    };
+    const entrar = accion(async ({ email, pass }) => {
+      await nube.entrar(email, pass);
+      await pintar();
+      ctx.sync?.correr();
+    });
+    const crear = accion(async ({ email, pass }) => {
+      const { necesitaConfirmar } = await nube.crearCuenta(email, pass);
+      if (necesitaConfirmar) {
+        estado.textContent = `Te enviamos un correo para confirmar la cuenta a ${email}. Abre el enlace (puede abrir Safari; no importa), vuelve aquí y toca Entrar.`;
+        return;
+      }
+      await pintar();
+      ctx.sync?.correr();
+    });
     seccion.append(
       h('p', {}, 'Entra con tu correo para tener la misma lista, precios y fotos en todos tus dispositivos. Sin señal la app sigue funcionando y sube los cambios después.'),
-      correo.nodo, enviar, estado,
+      correo.nodo, clave.nodo,
+      h('div', { class: 'acciones-lista' },
+        h('button', { class: 'boton', type: 'button', onclick: entrar }, 'Entrar'),
+        h('button', { class: 'boton secundario', type: 'button', onclick: crear }, 'Crear cuenta'),
+      ),
+      estado,
     );
-
-    function pedirCodigo(email) {
-      const codigo = campo({ etiqueta: `Código que llegó a ${email}`, id: 'codigo', inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: '10' });
-      const msg = h('p', { class: 'ayuda', role: 'status' }, 'Revisa tu correo (y la carpeta de spam).');
-      let verificando = false;
-      seccion.replaceChildren(
-        h('h2', {}, 'Tus dispositivos'),
-        codigo.nodo, msg,
-        h('button', {
-          class: 'boton', type: 'button',
-          onclick: async () => {
-            const token = codigo.input.value.replace(/\s/g, '');
-            if (!token || verificando) return;
-            verificando = true;
-            try {
-              await nube.verificarCodigo(email, token);
-              await pintar();
-              ctx.sync?.correr();
-            } catch {
-              codigo.mostrarError('El código no sirve o ya venció. Revisa el último correo o pide otro.');
-            }
-            verificando = false;
-          },
-        }, 'Entrar'),
-        h('button', { class: 'boton secundario', type: 'button', onclick: () => pintar() }, 'Usar otro correo'),
-      );
-      codigo.input.focus?.();
-    }
   };
   await pintar();
   return seccion;

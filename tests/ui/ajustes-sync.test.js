@@ -7,14 +7,17 @@ let n = 0;
 const boton = (raiz, texto) => [...raiz.querySelectorAll('button')].find((b) => b.textContent === texto);
 const escribir = (raiz, sel, v) => { const i = raiz.querySelector(sel); i.value = v; i.dispatchEvent(new Event('input')); };
 
-function nubeFalsa(conSesion = false) {
+function nubeFalsa({ conSesion = false, pideConfirmar = false } = {}) {
   let email = conSesion ? 'yo@correo.com' : null;
   return {
     cuenta: vi.fn(async () => (email ? { email } : null)),
-    enviarCodigo: vi.fn(async () => {}),
-    verificarCodigo: vi.fn(async (correo, codigo) => {
-      if (codigo !== '123456') throw new Error('Token has expired or is invalid');
+    entrar: vi.fn(async (correo, clave) => {
+      if (clave !== 'secreta123') throw new Error('Invalid login credentials');
       email = correo;
+    }),
+    crearCuenta: vi.fn(async (correo) => {
+      if (!pideConfirmar) email = correo;
+      return { necesitaConfirmar: pideConfirmar };
     }),
     salir: vi.fn(async () => { email = null; }),
   };
@@ -28,43 +31,58 @@ async function pintar(nube, sync = { correr: vi.fn(async () => ({ ok: true, baja
   return { raiz, ctx, sync };
 }
 
-test('sin sesión: pide el correo, envía el código y entra con él', async () => {
+test('sin sesión: entra con correo y contraseña y sincroniza', async () => {
   const nube = nubeFalsa();
   const { raiz, sync } = await pintar(nube);
   expect(raiz.textContent).toContain('Tus dispositivos');
   escribir(raiz, '#correo', 'yo@correo.com');
-  boton(raiz, 'Enviarme un código').click();
-  await vi.waitFor(() => expect(nube.enviarCodigo).toHaveBeenCalledWith('yo@correo.com'));
-  await vi.waitFor(() => expect(raiz.querySelector('#codigo')).toBeTruthy());
-  escribir(raiz, '#codigo', '123456');
+  escribir(raiz, '#clave', 'secreta123');
   boton(raiz, 'Entrar').click();
   await vi.waitFor(() => expect(raiz.textContent).toContain('Conectado como yo@correo.com'));
+  expect(nube.entrar).toHaveBeenCalledWith('yo@correo.com', 'secreta123');
   expect(sync.correr).toHaveBeenCalled();
 });
 
-test('un código equivocado muestra un error claro', async () => {
-  const nube = nubeFalsa();
-  const { raiz } = await pintar(nube);
+test('contraseña equivocada muestra un error claro', async () => {
+  const { raiz } = await pintar(nubeFalsa());
   escribir(raiz, '#correo', 'yo@correo.com');
-  boton(raiz, 'Enviarme un código').click();
-  await vi.waitFor(() => expect(raiz.querySelector('#codigo')).toBeTruthy());
-  escribir(raiz, '#codigo', '000000');
+  escribir(raiz, '#clave', 'otra-cosa');
   boton(raiz, 'Entrar').click();
-  await vi.waitFor(() => expect(raiz.textContent).toContain('El código no sirve o ya venció'));
+  await vi.waitFor(() => expect(raiz.textContent).toContain('Correo o contraseña incorrectos'));
 });
 
-test('un correo inválido no se envía', async () => {
+test('crear cuenta: si hay que confirmar el correo lo explica', async () => {
+  const nube = nubeFalsa({ pideConfirmar: true });
+  const { raiz } = await pintar(nube);
+  escribir(raiz, '#correo', 'yo@correo.com');
+  escribir(raiz, '#clave', 'secreta123');
+  boton(raiz, 'Crear cuenta').click();
+  await vi.waitFor(() => expect(raiz.textContent).toContain('Te enviamos un correo para confirmar'));
+  expect(nube.crearCuenta).toHaveBeenCalledWith('yo@correo.com', 'secreta123');
+});
+
+test('crear cuenta sin confirmación entra de una vez', async () => {
+  const { raiz } = await pintar(nubeFalsa());
+  escribir(raiz, '#correo', 'yo@correo.com');
+  escribir(raiz, '#clave', 'secreta123');
+  boton(raiz, 'Crear cuenta').click();
+  await vi.waitFor(() => expect(raiz.textContent).toContain('Conectado como yo@correo.com'));
+});
+
+test('valida correo y contraseña antes de enviar', async () => {
   const nube = nubeFalsa();
   const { raiz } = await pintar(nube);
   escribir(raiz, '#correo', 'yo');
-  boton(raiz, 'Enviarme un código').click();
+  escribir(raiz, '#clave', '123');
+  boton(raiz, 'Entrar').click();
   await new Promise((r) => setTimeout(r, 20));
-  expect(nube.enviarCodigo).not.toHaveBeenCalled();
+  expect(nube.entrar).not.toHaveBeenCalled();
   expect(raiz.textContent).toContain('Escribe un correo válido');
+  expect(raiz.textContent).toContain('al menos 8 caracteres');
 });
 
 test('con sesión: sincronizar ahora y cerrar sesión', async () => {
-  const nube = nubeFalsa(true);
+  const nube = nubeFalsa({ conSesion: true });
   const { raiz, sync } = await pintar(nube);
   expect(raiz.textContent).toContain('Conectado como yo@correo.com');
   boton(raiz, 'Sincronizar ahora').click();
@@ -76,8 +94,7 @@ test('con sesión: sincronizar ahora y cerrar sesión', async () => {
 });
 
 test('sin señal lo dice sin alarmar', async () => {
-  const nube = nubeFalsa(true);
-  const { raiz } = await pintar(nube, { correr: vi.fn(async () => ({ ok: false, sinRed: true })) });
+  const { raiz } = await pintar(nubeFalsa({ conSesion: true }), { correr: vi.fn(async () => ({ ok: false, sinRed: true })) });
   boton(raiz, 'Sincronizar ahora').click();
   await vi.waitFor(() => expect(raiz.textContent).toContain('Sin señal: tus cambios quedan guardados en el teléfono'));
 });
