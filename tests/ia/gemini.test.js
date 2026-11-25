@@ -46,3 +46,19 @@ test.each([
 test('parseRespuestaGemini sin candidatos', () => {
   expect(() => parseRespuestaGemini({})).toThrow(ErrorIA);
 });
+
+test('leerTagGemini pide los datos del tag de precio y devuelve el JSON', async () => {
+  const { leerTagGemini } = await import('../../src/ia/gemini.js');
+  let cuerpo;
+  const r = await leerTagGemini(blob(), {
+    clave: 'k', modelo: 'm',
+    fetchImpl: async (u, init) => { cuerpo = JSON.parse(init.body); return ok('{"precioNormal":12900,"precioDescuento":9990,"hasta":"2026-11-30"}')(); },
+  });
+  expect(cuerpo.contents[0].parts[0].text).toMatch(/precio/i);
+  expect(r).toMatchObject({ precioNormal: 12900, precioDescuento: 9990, hasta: '2026-11-30' });
+});
+
+test('leerTagGemini sin JSON es respuesta inválida', async () => {
+  const { leerTagGemini } = await import('../../src/ia/gemini.js');
+  await expect(leerTagGemini(blob(), { clave: 'k', fetchImpl: ok('no veo nada') })).rejects.toMatchObject({ codigo: 'respuesta_invalida' });
+});

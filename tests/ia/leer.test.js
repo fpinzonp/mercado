@@ -53,3 +53,33 @@ test('error inesperado de Gemini también cae a OCR', async () => {
   });
   expect(r.fuente).toBe('ocr');
 });
+
+const hoy = '2026-11-24';
+
+test('leerTag usa Gemini y normaliza', async () => {
+  const { leerTag } = await import('../../src/ia/leer.js');
+  const r = await leerTag(blob(), { clave: 'k', hoy }, {
+    gemini: async () => ({ precioNormal: 4500, precioPorUnidad: 4.5, unidadPrecioPorUnidad: 'g' }),
+    ocr: async () => { throw new Error('no debería llamarse'); },
+  });
+  expect(r).toMatchObject({ fuente: 'gemini', precioNormal: 4500, tamano: 1000, unidad: 'g' });
+});
+
+test('leerTag cae a la lectura del teléfono con aviso', async () => {
+  const { leerTag } = await import('../../src/ia/leer.js');
+  const r = await leerTag(blob(), { clave: 'k', hoy }, {
+    gemini: async () => { throw new ErrorIA('limite'); },
+    ocr: async () => ({ texto: 'Antes $12.900 Ahora $9.990', palabras: [] }),
+  });
+  expect(r).toMatchObject({ fuente: 'ocr', precioNormal: 12900, precioDescuento: 9990 });
+  expect(r.aviso).toMatch(/límite/i);
+});
+
+test('leerTag termina en manual si nada funciona', async () => {
+  const { leerTag } = await import('../../src/ia/leer.js');
+  const r = await leerTag(blob(), { clave: '', hoy }, {
+    gemini: async () => { throw new ErrorIA('sin_clave'); },
+    ocr: async () => { throw new Error('wasm'); },
+  });
+  expect(r.fuente).toBe('manual');
+});

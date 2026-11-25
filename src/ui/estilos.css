@@ -198,3 +198,5 @@ details.otros summary { font-weight: 700; min-height: 48px; display: flex; align
 .en-lista { font-size: 13px; font-weight: 700; color: var(--verde); }
 .nuevo-producto { margin-bottom: 8px; }
 .opciones label:has(input:disabled) { opacity: 0.6; cursor: default; }
+.fotos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.fotos .boton { margin: 0; }

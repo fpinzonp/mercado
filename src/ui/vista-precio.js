@@ -1,6 +1,6 @@
 import { h, limpiar, campo } from './dom.js';
 import { cargarEstado } from './estado.js';
-import { leerProducto as leerProductoReal } from '../ia/leer.js';
+import { leerProducto as leerProductoReal, leerTag as leerTagReal } from '../ia/leer.js';
 import { reducirImagen as reducirReal } from '../img/reducir.js';
 import { normalizarLectura } from '../logica/tamano.js';
 import { parsePrecio, parseTamano, tipoDeUnidad, formatoCOP } from '../logica/unidades.js';
@@ -15,6 +15,7 @@ export async function pintarPrecio(raiz, ctx, params = []) {
   const { repo } = ctx;
   const hoy = ctx.hoy();
   const leerProducto = ctx.leerProducto ?? leerProductoReal;
+  const leerTag = ctx.leerTag ?? leerTagReal;
   const reducirImagen = ctx.reducirImagen ?? reducirReal;
   const e = await cargarEstado(repo);
   const producto = e.productos.get(params[0]);
@@ -36,6 +37,7 @@ export async function pintarPrecio(raiz, ctx, params = []) {
 
   // Foto
   const inputFoto = h('input', { type: 'file', accept: 'image/*', capture: 'environment', id: 'foto', class: 'oculto' });
+  const inputTag = h('input', { type: 'file', accept: 'image/*', capture: 'environment', id: 'foto-tag', class: 'oculto' });
   const previa = h('img', { class: 'foto-previa', alt: 'Foto del producto', hidden: true });
   const estadoLectura = h('p', { class: 'leyendo', role: 'status' });
   const palabras = h('div', { class: 'palabras' });
@@ -162,9 +164,59 @@ export async function pintarPrecio(raiz, ctx, params = []) {
   prellenar();
 
   // Lo que el usuario escriba mientras se lee la foto no se pisa con la lectura.
-  const editado = { nombre: false, tamano: false };
+  const editado = { nombre: false, tamano: false, precio: false, desc: false };
   nombre.input.addEventListener('input', () => { editado.nombre = true; });
   tamano.input.addEventListener('input', () => { editado.tamano = true; });
+  precio.input.addEventListener('input', () => { editado.precio = true; });
+  for (const el of [tieneDesc, precioDesc.input, porcentaje.input, detalle.input, hasta.input]) {
+    el.addEventListener(el === tieneDesc ? 'change' : 'input', () => { editado.desc = true; });
+  }
+
+  // Foto del tag de precio del estante: llena precio, descuento, vigencia y tamaño.
+  inputTag.addEventListener('change', async () => {
+    const file = inputTag.files?.[0];
+    if (!file) return;
+    estadoLectura.textContent = 'Leyendo el precio…';
+    try {
+      const blob = await reducirImagen(file);
+      const r = await leerTag(blob, { clave: e.ajustes.geminiClave, modelo: e.ajustes.geminiModelo, hoy });
+      if (r.fuente === 'manual') {
+        estadoLectura.textContent = r.aviso ?? 'No pude leer el tag; escribe el precio.';
+        return;
+      }
+      if (r.precioNormal && !editado.precio) {
+        precio.input.value = sinSigno(r.precioNormal);
+        precio.mostrarError('');
+      }
+      if ((r.precioDescuento || r.porcentaje) && !editado.desc) {
+        tieneDesc.checked = true;
+        zonaDesc.hidden = false;
+        precioDesc.input.value = r.precioDescuento ? sinSigno(r.precioDescuento) : '';
+        porcentaje.input.value = r.precioDescuento ? '' : String(r.porcentaje);
+        if (!r.precioDescuento) calcularDesdePorcentaje();
+        detalle.input.value = r.detalle ?? '';
+        hasta.input.value = r.hasta ?? '';
+        precioDesc.mostrarError('');
+      }
+      if (r.tamano && !editado.tamano && !tamano.input.value && (!bloqueado() || r.unidad === tipo)) {
+        tamano.input.value = String(r.tamano);
+        if (!bloqueado() && r.unidad) elegirTipo(r.unidad);
+      }
+      const falta = [
+        !precio.input.value && 'precio',
+        !tamano.input.value && 'tamaño',
+        !nombre.input.value && 'nombre (toma la foto del producto o escríbelo)',
+      ].filter(Boolean);
+      estadoLectura.textContent = [
+        r.aviso,
+        'Revisa lo que leí del precio y corrige si hace falta.',
+        falta.length ? `Falta: ${falta.join(', ')}.` : '',
+      ].filter(Boolean).join(' ');
+    } catch {
+      estadoLectura.textContent = 'No pude procesar la foto del precio; escríbelo a mano.';
+    }
+    inputTag.value = '';
+  });
 
   inputFoto.addEventListener('change', async () => {
     const file = inputFoto.files?.[0];
@@ -218,7 +270,12 @@ export async function pintarPrecio(raiz, ctx, params = []) {
   const form = h('form', { novalidate: true },
     h('h1', {}, `Precio de ${producto.nombre}`),
     h('div', { class: 'campo' }, h('label', { for: 'mercado' }, 'Mercado'), selMercado),
-    h('label', { class: 'boton', for: 'foto' }, 'Tomar foto'), inputFoto,
+    h('div', { class: 'fotos' },
+      h('label', { class: 'boton', for: 'foto' }, 'Foto del producto'),
+      h('label', { class: 'boton secundario', for: 'foto-tag' }, 'Foto del precio'),
+    ),
+    inputFoto, inputTag,
+    h('p', { class: 'ayuda' }, 'El producto da el nombre y el tamaño; el tag del estante, el precio y la promoción.'),
     previa, estadoLectura, palabras,
     nombre.nodo, selectorTipo, notaTipo, tipoError, tamano.nodo, precio.nodo,
     h('label', { class: 'interruptor', for: 'tiene-descuento' }, tieneDesc, 'Tiene descuento'),

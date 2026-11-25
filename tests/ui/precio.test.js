@@ -191,3 +191,73 @@ test('oferta existente llega prellenada', async () => {
   expect(raiz.querySelector('#nombre').value).toBe('Arroz Diana');
   expect(raiz.querySelector('#precio').value).toBe('4.500');
 });
+
+// Foto del tag de precio
+async function conTag(tag, { conOferta = false } = {}) {
+  const repo = await abrirDB(`ui-precio-${n++}`);
+  const d1 = await repo.guardarMercado({ nombre: 'D1', orden: 0 });
+  const aceite = await repo.guardarProducto({ nombre: 'Aceite' });
+  if (conOferta) await repo.guardarOferta({ productoId: aceite.id, mercadoId: d1.id, nombreReal: 'Aceite Premier', tamano: 900, precioNormal: 11000 }, hoy);
+  const ctx = {
+    repo, hoy: () => hoy, ir: vi.fn(),
+    leerTag: vi.fn(async () => ({ fuente: 'gemini', precioNormal: null, precioDescuento: null, porcentaje: null, detalle: null, hasta: null, tamano: null, unidad: null, ...tag })),
+    reducirImagen: async (f) => f,
+  };
+  const raiz = document.createElement('div');
+  await pintarPrecio(raiz, ctx, [aceite.id]);
+  return { repo, ctx, raiz, aceite };
+}
+async function fotoTag(raiz) {
+  const input = raiz.querySelector('#foto-tag');
+  Object.defineProperty(input, 'files', { value: [new File(['x'], 'tag.jpg', { type: 'image/jpeg' })] });
+  input.dispatchEvent(new Event('change'));
+}
+
+test('la foto del tag llena precio, descuento, vigencia y tamaño', async () => {
+  const { repo, ctx, raiz, aceite } = await conTag({ precioNormal: 12900, precioDescuento: 9990, detalle: 'Oferta', hasta: '2026-11-30', tamano: 900, unidad: 'ml' });
+  expect(raiz.querySelector('#foto-tag')).toBeTruthy();
+  await fotoTag(raiz);
+  await vi.waitFor(() => expect(raiz.querySelector('#precio').value).toBe('12.900'));
+  expect(raiz.querySelector('#tiene-descuento').checked).toBe(true);
+  expect(raiz.querySelector('#precio-descuento').value).toBe('9.990');
+  expect(raiz.querySelector('#detalle').value).toBe('Oferta');
+  expect(raiz.querySelector('#hasta').value).toBe('2026-11-30');
+  expect(raiz.querySelector('#tamano').value).toBe('900');
+  expect(raiz.querySelector('input[name=tipo]:checked').value).toBe('ml');
+  expect(raiz.textContent).toContain('Revisa lo que leí');
+  escribir(raiz, '#nombre', 'Aceite Girasol');
+  enviar(raiz);
+  await vi.waitFor(() => expect(ctx.ir).toHaveBeenCalled());
+  expect((await repo.ofertasPorProducto()).get(aceite.id)[0])
+    .toMatchObject({ precioNormal: 12900, precioDescuento: 9990, descuentoHasta: '2026-11-30', tamano: 900 });
+});
+
+test('la foto del tag avisa qué falta llenar a mano', async () => {
+  const { raiz } = await conTag({ precioNormal: 12900 });
+  await fotoTag(raiz);
+  await vi.waitFor(() => expect(raiz.querySelector('#precio').value).toBe('12.900'));
+  expect(raiz.textContent).toMatch(/Falta: .*tamaño/);
+});
+
+test('la foto del tag no pisa el precio que ya escribí ni el tamaño guardado', async () => {
+  const { raiz } = await conTag({ precioNormal: 12900, tamano: 1000, unidad: 'ml' }, { conOferta: true });
+  escribir(raiz, '#precio', '10.500');
+  await fotoTag(raiz);
+  await vi.waitFor(() => expect(raiz.textContent).toContain('Revisa lo que leí'));
+  expect(raiz.querySelector('#precio').value).toBe('10.500');
+  expect(raiz.querySelector('#tamano').value).toBe('900');
+});
+
+test('un % de descuento del tag calcula el precio con descuento', async () => {
+  const { raiz } = await conTag({ precioNormal: 10000, porcentaje: 20, detalle: '20% dto' });
+  await fotoTag(raiz);
+  await vi.waitFor(() => expect(raiz.querySelector('#precio-descuento').value).toBe('8.000'));
+  expect(raiz.querySelector('#porcentaje').value).toBe('20');
+  expect(raiz.querySelector('#tiene-descuento').checked).toBe(true);
+});
+
+test('si el tag no se pudo leer lo dice', async () => {
+  const { raiz } = await conTag({ fuente: 'manual', aviso: 'No pude leer el tag; escribe el precio.' });
+  await fotoTag(raiz);
+  await vi.waitFor(() => expect(raiz.textContent).toContain('No pude leer el tag'));
+});

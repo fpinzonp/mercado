@@ -22,30 +22,55 @@ async function aBase64(blob) {
   return btoa(bin);
 }
 
-/** Saca {nombre, tamano, unidad} de la respuesta de generateContent. */
-export function parseRespuestaGemini(cuerpo) {
+const PROMPT_TAG = `Eres un asistente que lee el tag (etiqueta) de precio del estante de un supermercado en Colombia.
+Mira la foto y responde SOLO con JSON, sin texto adicional, con esta forma:
+{"precioNormal": entero o null, "precioDescuento": entero o null, "porcentaje": número o null, "detalle": texto o null,
+ "hasta": "AAAA-MM-DD" o null, "tamano": número o null, "unidad": "g" | "kg" | "ml" | "L" | "unidad" | null,
+ "precioPorUnidad": número o null, "unidadPrecioPorUnidad": "g" | "kg" | "ml" | "L" | "unidad" | null}
+- Precios en pesos colombianos, sin puntos ni signo (ej. 12900). "precioNormal" es el precio sin promoción ("antes"); si no hay promoción, el único precio.
+- "precioDescuento" solo si el tag muestra un precio rebajado ("ahora", "oferta"). "porcentaje" si muestra un % de descuento.
+- "detalle": la promoción como aparece (ej. "2x1", "Lleve 3 pague 2", "-20% con tarjeta").
+- "hasta": la fecha de vigencia de la promoción, si aparece.
+- "tamano" es el contenido neto de UNA presentación. "precioPorUnidad" es el precio por gramo, mililitro, kilo, litro o unidad que muchos tags muestran en letra pequeña.
+- Si no se ve algo, usa null.`;
+
+/** Texto JSON de la respuesta de generateContent, ya parseado. */
+function jsonDeRespuesta(cuerpo) {
   const texto = cuerpo?.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
   const limpio = texto.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
-  let datos;
   try {
-    datos = JSON.parse(limpio);
-  } catch {
-    throw new ErrorIA('respuesta_invalida', 'Gemini no devolvió JSON');
-  }
+    const datos = JSON.parse(limpio);
+    if (datos && typeof datos === 'object') return datos;
+  } catch { /* abajo */ }
+  throw new ErrorIA('respuesta_invalida', 'Gemini no devolvió JSON');
+}
+
+/** Saca {nombre, tamano, unidad} de la respuesta de generateContent. */
+export function parseRespuestaGemini(cuerpo) {
+  const datos = jsonDeRespuesta(cuerpo);
   if (!datos || typeof datos.nombre !== 'string' || !datos.nombre.trim()) {
     throw new ErrorIA('respuesta_invalida', 'Gemini no devolvió el nombre');
   }
   return { nombre: datos.nombre.trim(), tamano: datos.tamano ?? null, unidad: datos.unidad ?? null };
 }
 
-export async function leerEtiquetaGemini(blob, { clave, modelo = 'gemini-flash-latest', fetchImpl = globalThis.fetch, espera = 8000 } = {}) {
+export async function leerEtiquetaGemini(blob, opciones = {}) {
+  return parseRespuestaGemini(await pedirGemini(blob, PROMPT, opciones));
+}
+
+/** Datos crudos del tag de precio (se limpian con normalizarTag). */
+export async function leerTagGemini(blob, opciones = {}) {
+  return jsonDeRespuesta(await pedirGemini(blob, PROMPT_TAG, opciones));
+}
+
+async function pedirGemini(blob, prompt, { clave, modelo = 'gemini-flash-latest', fetchImpl = globalThis.fetch, espera = 8000 } = {}) {
   if (!clave) throw new ErrorIA('sin_clave');
   if (globalThis.navigator?.onLine === false) throw new ErrorIA('sin_red');
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelo)}:generateContent?key=${encodeURIComponent(clave)}`;
   const body = JSON.stringify({
     contents: [{
       parts: [
-        { text: PROMPT },
+        { text: prompt },
         { inlineData: { mimeType: blob.type || 'image/jpeg', data: await aBase64(blob) } },
       ],
     }],
@@ -73,5 +98,5 @@ export async function leerEtiquetaGemini(blob, { clave, modelo = 'gemini-flash-l
   } catch {
     throw new ErrorIA('respuesta_invalida');
   }
-  return parseRespuestaGemini(cuerpo);
+  return cuerpo;
 }

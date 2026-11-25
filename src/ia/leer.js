@@ -1,6 +1,8 @@
-import { leerEtiquetaGemini } from './gemini.js';
+import { leerEtiquetaGemini, leerTagGemini } from './gemini.js';
 import { leerTextoLocal } from './ocr.js';
 import { detectarTamano } from '../logica/tamano.js';
+import { interpretarTag, normalizarTag } from '../logica/tag.js';
+import { hoyLocal } from '../logica/fechas.js';
 
 const AVISOS = {
   limite: 'Se acabó el cupo gratis de Gemini por ahora (límite de uso); usé la lectura del teléfono.',
@@ -32,5 +34,27 @@ export async function leerProducto(blob, { clave, modelo } = {}, deps = {}) {
     return r;
   } catch {
     return { fuente: 'manual', aviso: 'No pude leer la etiqueta; escribe el nombre.' };
+  }
+}
+
+/**
+ * Lee el tag de precio del estante: Gemini, luego el teléfono, luego manual.
+ * @returns {Promise<{fuente, precioNormal, precioDescuento, porcentaje, detalle, hasta, tamano, unidad, aviso?}>}
+ */
+export async function leerTag(blob, { clave, modelo, hoy = hoyLocal() } = {}, deps = {}) {
+  const gemini = deps.gemini ?? leerTagGemini;
+  const ocr = deps.ocr ?? leerTextoLocal;
+
+  let aviso;
+  try {
+    return { fuente: 'gemini', ...normalizarTag(await gemini(blob, { clave, modelo }), hoy) };
+  } catch (e) {
+    aviso = AVISOS[e?.codigo];
+  }
+  try {
+    const { texto } = await ocr(blob);
+    return { fuente: 'ocr', ...interpretarTag(texto, hoy), ...(aviso ? { aviso } : {}) };
+  } catch {
+    return { fuente: 'manual', ...normalizarTag(null, hoy), aviso: 'No pude leer el tag; escribe el precio.' };
   }
 }
