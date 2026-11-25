@@ -32,6 +32,111 @@ export async function guardarRespaldo(repo) {
   }
 }
 
+const MENSAJE_SYNC = (r) => {
+  if (!r) return '';
+  if (r.ok) return `Sincronizado. Bajé ${r.bajados ?? 0} y subí ${r.subidos ?? 0} cambios.`;
+  if (r.sinRed) return 'Sin señal: tus cambios quedan guardados en el teléfono y se suben cuando vuelva.';
+  return `No se pudo sincronizar (${r.error ?? 'error desconocido'}). Se vuelve a intentar solo.`;
+};
+const haceCuanto = (ms) => {
+  if (!ms) return 'nunca';
+  const min = Math.round((Date.now() - ms) / 60000);
+  if (min < 1) return 'hace un momento';
+  if (min < 60) return `hace ${min} min`;
+  const h = Math.round(min / 60);
+  return h < 24 ? `hace ${h} h` : `hace ${Math.round(h / 24)} días`;
+};
+
+/** Iniciar sesión con un código por correo y sincronizar entre dispositivos. */
+async function seccionDispositivos(ctx) {
+  const nube = await ctx.obtenerNube?.().catch(() => null);
+  if (!nube) return null;
+  const seccion = h('section', { class: 'bloque dispositivos' });
+
+  const pintar = async () => {
+    const cuenta = await nube.cuenta().catch(() => null);
+    seccion.replaceChildren(h('h2', {}, 'Tus dispositivos'));
+    if (cuenta) {
+      const estado = h('p', { role: 'status' }, `Última sincronización: ${haceCuanto(await ctx.repo.leerAjuste('ultimaSync'))}.`);
+      let ocupado = false;
+      seccion.append(
+        h('p', {}, `Conectado como ${cuenta.email}. Tus datos se guardan también en la nube y se sincronizan solos.`),
+        estado,
+        h('button', {
+          class: 'boton', type: 'button',
+          onclick: async () => {
+            if (ocupado) return;
+            ocupado = true;
+            estado.textContent = 'Sincronizando…';
+            estado.textContent = MENSAJE_SYNC(await ctx.sync?.correr());
+            ocupado = false;
+          },
+        }, 'Sincronizar ahora'),
+        h('button', { class: 'boton secundario', type: 'button', onclick: async () => { await nube.salir(); await pintar(); } }, 'Cerrar sesión'),
+      );
+      return;
+    }
+
+    const correo = campo({ etiqueta: 'Tu correo', id: 'correo', type: 'email', autocomplete: 'email', inputmode: 'email', placeholder: 'nombre@correo.com' });
+    const estado = h('p', { class: 'ayuda', role: 'status' });
+    correo.input.addEventListener('input', () => correo.mostrarError(''));
+    let enviando = false;
+    const enviar = h('button', {
+      class: 'boton', type: 'button',
+      onclick: async () => {
+        const email = correo.input.value.trim();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { correo.mostrarError('Escribe un correo válido, por ejemplo nombre@correo.com.'); return; }
+        if (enviando) return;
+        enviando = true;
+        estado.textContent = 'Enviando…';
+        try {
+          await nube.enviarCodigo(email);
+          pedirCodigo(email);
+        } catch (e) {
+          estado.textContent = /rate|limit|seconds/i.test(e.message)
+            ? 'Ya se enviaron varios códigos. Espera unos minutos e inténtalo otra vez.'
+            : `No se pudo enviar el código: ${e.message}`;
+        }
+        enviando = false;
+      },
+    }, 'Enviarme un código');
+    seccion.append(
+      h('p', {}, 'Entra con tu correo para tener la misma lista, precios y fotos en todos tus dispositivos. Sin señal la app sigue funcionando y sube los cambios después.'),
+      correo.nodo, enviar, estado,
+    );
+
+    function pedirCodigo(email) {
+      const codigo = campo({ etiqueta: `Código que llegó a ${email}`, id: 'codigo', inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: '10' });
+      const msg = h('p', { class: 'ayuda', role: 'status' }, 'Revisa tu correo (y la carpeta de spam).');
+      let verificando = false;
+      seccion.replaceChildren(
+        h('h2', {}, 'Tus dispositivos'),
+        codigo.nodo, msg,
+        h('button', {
+          class: 'boton', type: 'button',
+          onclick: async () => {
+            const token = codigo.input.value.replace(/\s/g, '');
+            if (!token || verificando) return;
+            verificando = true;
+            try {
+              await nube.verificarCodigo(email, token);
+              await pintar();
+              ctx.sync?.correr();
+            } catch {
+              codigo.mostrarError('El código no sirve o ya venció. Revisa el último correo o pide otro.');
+            }
+            verificando = false;
+          },
+        }, 'Entrar'),
+        h('button', { class: 'boton secundario', type: 'button', onclick: () => pintar() }, 'Usar otro correo'),
+      );
+      codigo.input.focus?.();
+    }
+  };
+  await pintar();
+  return seccion;
+}
+
 export async function pintarAjustes(raiz, ctx) {
   const { repo } = ctx;
   limpiar(raiz);
@@ -95,8 +200,10 @@ export async function pintarAjustes(raiz, ctx) {
     archivo.value = '';
   });
 
+  const dispositivos = await seccionDispositivos(ctx);
   raiz.append(
     h('h1', {}, 'Ajustes'),
+    dispositivos,
     h('section', { class: 'bloque' }, h('h2', {}, 'Mercados'), listaMercados, formNuevo),
     h('section', { class: 'bloque' },
       h('h2', {}, 'Leer fotos con Gemini'),
@@ -115,7 +222,7 @@ export async function pintarAjustes(raiz, ctx) {
     ),
     h('section', { class: 'bloque' },
       h('h2', {}, 'Borrar todo'),
-      h('p', {}, 'Borra mercados, productos, precios, fotos y la lista de este teléfono.'),
+      h('p', {}, 'Borra mercados, productos, precios, fotos y la lista de este teléfono. Lo guardado en la nube no se borra.'),
       h('button', { class: 'boton peligro', onclick: () => confirmarBorrarTodo(ctx) }, 'Borrar todo'),
     ),
   );

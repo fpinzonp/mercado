@@ -62,10 +62,21 @@ function prepararRespaldo(datos) {
 export async function importarRespaldo(repo, datos) {
   const listo = prepararRespaldo(datos);
   const almacenes = ['mercados', 'productos', 'ofertas', 'lista', 'fotos'];
-  const tx = repo.db.transaction(almacenes, 'readwrite');
+  const conSync = ['mercados', 'productos', 'ofertas', 'lista'];
+  const tx = repo.db.transaction([...almacenes, 'pendientes'], 'readwrite');
+  const ahora = Date.now();
+  const pendiente = (tabla, id) => tx.objectStore('pendientes').put({ clave: `${tabla}:${id}`, tabla, id });
   try {
+    // Importar reemplaza todo, también en la nube: lo que no venga en el respaldo se anota como borrado.
+    for (const a of conSync) for (const id of await tx.objectStore(a).getAllKeys()) await pendiente(a, id);
     for (const a of almacenes) await tx.objectStore(a).clear();
-    for (const a of almacenes) for (const r of listo[a]) await tx.objectStore(a).put(r);
+    for (const a of almacenes) {
+      for (const r of listo[a]) {
+        const conSello = conSync.includes(a) ? { ...r, actualizadoEn: ahora } : r;
+        await tx.objectStore(a).put(conSello);
+        if (conSync.includes(a)) await pendiente(a, r.id);
+      }
+    }
     await tx.done;
   } catch (e) {
     try { tx.abort(); } catch { /* ya terminó */ }

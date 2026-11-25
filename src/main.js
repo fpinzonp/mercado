@@ -40,8 +40,26 @@ async function arrancar() {
   const rutas = {};
   for (const [n, v] of Object.entries(vistas)) rutas[n] = await guardian(n, v);
 
+  // La nube se carga aparte, para no demorar la primera pantalla.
+  let nubePromesa = null;
+  ctx.obtenerNube = () => (nubePromesa ??= import('./datos/remoto-supabase.js').then((m) => m.crearNube()));
+
   await iniciarRouter(raiz, rutas, ctx);
   navigator.storage?.persist?.().catch(() => {});
+
+  try {
+    const [{ iniciarAutoSync }, nube] = await Promise.all([import('./datos/auto-sync.js'), ctx.obtenerNube()]);
+    ctx.sync = iniciarAutoSync(repo, nube, {
+      alTerminar: (r) => {
+        document.body.dataset.sync = r.ok ? 'ok' : r.sinRed ? 'sin-red' : 'error';
+        // Si llegaron cambios de otro dispositivo, repinta las pantallas de consulta (no los formularios).
+        if (r.ok && r.bajados > 0 && ['lista', 'productos', 'comprar'].includes(document.body.dataset.vista)) ctx.refrescar();
+      },
+    });
+    ctx.sync.correr();
+  } catch (e) {
+    console.warn('Sin sincronización por ahora', e);
+  }
 }
 
 arrancar();
