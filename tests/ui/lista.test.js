@@ -109,3 +109,28 @@ test('agregar un producto que ya está en la lista suma la cantidad; cantidad in
   expect(items).toHaveLength(1);
   expect(items[0].cantidad).toBe(2500);
 });
+
+test('agregar: se puede cancelar sin elegir nada y vuelve a la lista sin guardar', async () => {
+  const { repo, ctx } = await escenario();
+  const raiz = document.createElement('main');
+  await pintarAgregar(raiz, ctx);
+  const cancelar = [...raiz.querySelectorAll('button')].find((b) => b.textContent === 'Cancelar');
+  expect(cancelar).toBeTruthy();
+  cancelar.click();
+  expect(ctx.ir).toHaveBeenCalledWith('#/lista');
+  expect((await repo.listarItems()).length).toBe(1);
+});
+
+test('agregar: también se puede cancelar después de elegir un producto', async () => {
+  const { ctx } = await escenario();
+  const raiz = document.createElement('main');
+  await pintarAgregar(raiz, ctx);
+  const buscar = raiz.querySelector('#buscar');
+  buscar.value = 'Arr';
+  buscar.dispatchEvent(new Event('input'));
+  raiz.querySelector('[data-producto]').click();
+  const cancelar = [...raiz.querySelectorAll('button')].find((b) => b.textContent === 'Cancelar');
+  expect(cancelar).toBeTruthy();
+  cancelar.click();
+  expect(ctx.ir).toHaveBeenCalledWith('#/lista');
+});

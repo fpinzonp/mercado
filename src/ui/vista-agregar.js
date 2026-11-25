@@ -99,6 +99,7 @@ export async function pintarAgregar(raiz, ctx) {
     (producto ? cantidad.input : form.querySelector('input'))?.focus?.();
   }
 
-  raiz.append(h('h1', {}, 'Agregar a la lista'), buscar.nodo, resultados, zonaCantidad);
+  const cancelar = h('button', { class: 'boton secundario', type: 'button', onclick: () => ctx.ir('#/lista') }, 'Cancelar');
+  raiz.append(h('h1', {}, 'Agregar a la lista'), buscar.nodo, resultados, zonaCantidad, cancelar);
   buscar.input.focus();
 }
