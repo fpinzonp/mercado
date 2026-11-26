@@ -42,6 +42,7 @@ function fechaValida(dia, mes, anio, hoy) {
 /** Deja los datos coherentes: descuento menor que el normal, fecha no vencida, tamaño deducido del precio por unidad. */
 function completar(r, hoy) {
   const out = {
+    nombre: r.nombre ? String(r.nombre).trim().replace(/\s+/g, ' ') || null : null,
     precioNormal: r.precioNormal ?? null,
     precioDescuento: r.precioDescuento ?? null,
     porcentaje: null,
@@ -61,6 +62,23 @@ function completar(r, hoy) {
     out.unidad = r.unitario.tipo;
   }
   return out;
+}
+
+// Líneas del tag que no son el nombre del producto.
+const NO_NOMBRE = /\$|precio|valor|antes|ahora|ahorr|oferta|promo|hasta|v[aá]lid|vigencia|vence|dto|desc|%|lleve|pague|unitario|c[oó]digo|\bref\b/i;
+const TAMANO = /x?\s*\d[\d.,]*\s*(?:kg|kilos?|gramos|grs?|g|ml|cc|litros?|lt|l|unidades|unidad|unds?|un)(?![\p{L}])/giu;
+const capitalizar = (w) => (w.length > 2 && w === w.toUpperCase() ? w[0] + w.slice(1).toLowerCase() : w);
+
+/** El nombre suele ser la primera línea con palabras que no es precio, promoción ni vigencia. */
+function nombreDelTag(texto) {
+  for (const linea of String(texto ?? '').split(/\n+/)) {
+    if (NO_NOMBRE.test(linea)) continue;
+    const palabras = linea.replace(TAMANO, ' ').split(/\s+/)
+      .map((w) => w.replace(/^[^\p{L}]+|[^\p{L}]+$/gu, ''))
+      .filter((w) => /\p{L}{2,}/u.test(w) && !/\d/.test(w));
+    if (palabras.join('').length >= 3) return palabras.map(capitalizar).join(' ');
+  }
+  return null;
 }
 
 /** Interpreta el texto que leyó el teléfono (OCR) del tag de precio. */
@@ -111,8 +129,10 @@ export function interpretarTag(texto, hoy) {
   const pct = t.match(/(\d{1,2})\s*%/);
   const v = t.match(VIGENCIA);
   const tam = detectarTamano(t);
+  const nombre = nombreDelTag(texto);
 
   return completar({
+    nombre,
     precioNormal,
     precioDescuento,
     porcentaje: pct ? Number(pct[1]) : null,
@@ -130,6 +150,7 @@ export function normalizarTag(d, hoy) {
   const lectura = normalizarLectura({ tamano: d?.tamano, unidad: d?.unidad }, null);
   const pu = typeof d?.precioPorUnidad === 'number' ? d.precioPorUnidad : parseNumero(d?.precioPorUnidad);
   return completar({
+    nombre: d?.nombre ?? null,
     precioNormal: precio(d?.precioNormal),
     precioDescuento: precio(d?.precioDescuento),
     porcentaje: Number(d?.porcentaje) || null,

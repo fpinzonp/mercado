@@ -10,7 +10,8 @@ Mira la foto y responde SOLO con JSON, sin texto adicional, con esta forma:
 - Si no se ve algo, usa null. Escribe el nombre en español, como aparece en el empaque.`,
   tag: `Eres un asistente que lee el tag (etiqueta) de precio del estante de un supermercado en Colombia.
 Mira la foto y responde SOLO con JSON, sin texto adicional, con esta forma:
-{"precioNormal": entero o null, "precioDescuento": entero o null, "porcentaje": número o null, "detalle": texto o null,
+{"nombre": "marca y producto como aparece en el tag, sin el tamaño (ej. \\"Arroz Diana\\")" o null,
+ "precioNormal": entero o null, "precioDescuento": entero o null, "porcentaje": número o null, "detalle": texto o null,
  "hasta": "AAAA-MM-DD" o null, "tamano": número o null, "unidad": "g" | "kg" | "ml" | "L" | "unidad" | null,
  "precioPorUnidad": número o null, "unidadPrecioPorUnidad": "g" | "kg" | "ml" | "L" | "unidad" | null}
 - Precios en pesos colombianos, sin puntos ni signo (ej. 12900). "precioNormal" es el precio sin promoción ("antes"); si no hay promoción, el único precio.

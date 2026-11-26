@@ -26,8 +26,8 @@ export async function pintarProductos(raiz, ctx) {
     const existe = e.productosLista.find((p) => normalizar(p.nombre) === normalizar(nombre));
     if (existe) { nuevo.mostrarError(`Ya tienes «${existe.nombre}».`); return; }
     creando = true;
-    await repo.guardarProducto({ nombre });
-    repintar();
+    const p = await repo.guardarProducto({ nombre });
+    ctx.ir(`#/precio/${p.id}`); // directo a registrar su precio y su foto
   });
 
   const buscar = campo({ etiqueta: 'Buscar', id: 'buscar-producto', placeholder: 'Ej. arroz', autocomplete: 'off', enterkeyhint: 'search' });
@@ -68,6 +68,7 @@ export async function pintarProductos(raiz, ctx) {
     h('h1', {}, 'Productos'),
     h('p', { class: 'ayuda' }, 'Todos tus productos, estén o no en la lista. Anota sus precios para saber dónde comprarlos el próximo mes.'),
     formNuevo,
+    h('button', { class: 'boton secundario', type: 'button', onclick: () => ctx.ir('#/precio/nuevo') }, 'Nuevo producto con foto'),
   );
   if (!filas.length) {
     raiz.append(h('div', { class: 'vacio' }, h('p', {}, 'Todavía no tienes productos. Crea uno aquí o agrégalo desde la lista.')));

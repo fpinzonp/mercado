@@ -32,13 +32,13 @@ test('muestra todos los productos aunque no estén en la lista, con dónde salen
 });
 
 test('crear un producto nuevo no lo pone en la lista', async () => {
-  const { repo, raiz } = await escenario();
+  const { repo, raiz, ctx } = await escenario();
   const nombre = raiz.querySelector('#nuevo-producto');
   nombre.value = 'Atún';
   raiz.querySelector('form.nuevo-producto').dispatchEvent(new Event('submit', { cancelable: true }));
   await vi.waitFor(async () => expect((await repo.listarProductos()).map((p) => p.nombre)).toContain('Atún'));
   expect(await repo.listarItems()).toHaveLength(0);
-  await vi.waitFor(() => expect(filaDe(raiz, 'Atún')).toBeTruthy());
+  await vi.waitFor(() => expect(ctx.ir).toHaveBeenCalled());
 });
 
 test('crear un producto con un nombre que ya existe no lo duplica', async () => {

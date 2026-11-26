@@ -6,6 +6,7 @@ import { normalizarLectura } from '../logica/tamano.js';
 import { parsePrecio, parseTamano, tipoDeUnidad, formatoCOP } from '../logica/unidades.js';
 import { descuentoVigente } from '../logica/comparar.js';
 import { formatoDiaMes } from '../logica/fechas.js';
+import { normalizarNombre } from '../logica/nombres.js';
 
 const sinSigno = (n) => formatoCOP(n).slice(1);
 const NOMBRE_TIPO = { g: 'gramos', ml: 'mililitros', unidad: 'unidades' };
@@ -20,14 +21,16 @@ export async function pintarPrecio(raiz, ctx, params = []) {
   const tokenIA = async () => (await ctx.obtenerNube?.().catch(() => null))?.token?.() ?? null;
   const reducirImagen = ctx.reducirImagen ?? reducirReal;
   const e = await cargarEstado(repo);
-  const producto = e.productos.get(params[0]);
+  // #/precio/nuevo: producto nuevo con foto en un solo paso (se crea al guardar).
+  const esNuevo = params[0] === 'nuevo';
+  const producto = esNuevo ? { id: null, nombre: '', tipoUnidad: undefined } : e.productos.get(params[0]);
   limpiar(raiz);
   if (!producto) {
     raiz.append(h('p', {}, 'Este producto ya no existe.'), h('button', { class: 'boton', onclick: () => ctx.ir('#/lista') }, 'Volver a la lista'));
     return;
   }
-  const volverA = ['#/comprar', '#/productos'].find((r) => ctx.rutaAnterior?.startsWith(r)) ?? '#/lista';
-  const ofertas = e.ofertasPorProducto.get(producto.id) ?? [];
+  const volverA = esNuevo ? '#/productos' : ['#/comprar', '#/productos'].find((r) => ctx.rutaAnterior?.startsWith(r)) ?? '#/lista';
+  const ofertas = esNuevo ? [] : e.ofertasPorProducto.get(producto.id) ?? [];
   let foto = null;
 
   // Mercado
@@ -39,8 +42,8 @@ export async function pintarPrecio(raiz, ctx, params = []) {
   if (mercadoInicial) selMercado.value = mercadoInicial;
 
   // Foto
-  const inputFoto = h('input', { type: 'file', accept: 'image/*', capture: 'environment', id: 'foto', class: 'oculto' });
-  const inputTag = h('input', { type: 'file', accept: 'image/*', capture: 'environment', id: 'foto-tag', class: 'oculto' });
+  const inputFoto = h('input', { type: 'file', accept: 'image/*', id: 'foto', class: 'oculto' });
+  const inputTag = h('input', { type: 'file', accept: 'image/*', id: 'foto-tag', class: 'oculto' });
   const previa = h('img', { class: 'foto-previa', alt: 'Foto del producto', hidden: true });
   const estadoLectura = h('p', { class: 'leyendo', role: 'status' });
   const palabras = h('div', { class: 'palabras' });
@@ -57,7 +60,12 @@ export async function pintarPrecio(raiz, ctx, params = []) {
   const bloqueado = () => Boolean(producto.tipoUnidad) && ofertas.some((o) => o.mercadoId !== selMercado.value);
 
   // Campos
-  const nombre = campo({ etiqueta: 'Nombre real', id: 'nombre', autocomplete: 'off', placeholder: `Ej. ${producto.nombre} marca X` });
+  const nombre = campo({ etiqueta: 'Nombre real', id: 'nombre', autocomplete: 'off', placeholder: esNuevo ? 'Ej. Café Sello Rojo' : `Ej. ${producto.nombre} marca X` });
+  const productoNombre = esNuevo ? campo({
+    etiqueta: 'Producto', id: 'producto-nombre', autocomplete: 'off', placeholder: 'Ej. Café',
+    ayuda: 'Así lo buscas en la lista. Si lo dejas vacío se usa el nombre real.',
+  }) : null;
+  const proponerProducto = (texto) => { if (productoNombre && texto && !productoNombre.input.value) productoNombre.input.value = texto; };
   const tamano = campo({ etiqueta: 'Tamaño de la presentación', id: 'tamano', autocomplete: 'off', inputmode: 'decimal', ayuda: ' ' });
   const ayudaTamano = tamano.nodo.querySelector('.ayuda');
   const elegirTipo = (t) => {
@@ -194,6 +202,12 @@ export async function pintarPrecio(raiz, ctx, params = []) {
         estadoLectura.textContent = r.aviso ?? 'No pude leer el tag; escribe el precio.';
         return;
       }
+      // Una sola foto del tag: también el nombre, si todavía no hay uno.
+      if (r.nombre && !editado.nombre && !nombre.input.value) {
+        nombre.input.value = r.nombre;
+        nombre.mostrarError('');
+      }
+      proponerProducto(r.nombre);
       if (r.precioNormal && !editado.precio) {
         precio.input.value = sinSigno(r.precioNormal);
         precio.mostrarError('');
@@ -248,6 +262,7 @@ export async function pintarPrecio(raiz, ctx, params = []) {
       const fijo = bloqueado();
       const lectura = normalizarLectura(r, fijo ? tipo : (tipoDeUnidad(r.unidad) || tipoMarcado()));
       if (r.fuente === 'gemini' && lectura.nombre && !editado.nombre) nombre.input.value = lectura.nombre;
+      if (r.fuente === 'gemini') proponerProducto(lectura.nombre);
       if (!editado.tamano) {
         if (lectura.tamano) {
           tamano.input.value = String(lectura.tamano);
@@ -278,15 +293,16 @@ export async function pintarPrecio(raiz, ctx, params = []) {
   });
 
   const form = h('form', { novalidate: true },
-    h('h1', {}, `Precio de ${producto.nombre}`),
+    h('h1', {}, esNuevo ? 'Nuevo producto' : `Precio de ${producto.nombre}`),
+    productoNombre?.nodo,
     h('div', { class: 'campo' }, h('label', { for: 'mercado' }, 'Mercado'), selMercado),
     ultimo,
     h('div', { class: 'fotos' },
-      h('label', { class: 'boton', for: 'foto' }, 'Foto del producto'),
-      h('label', { class: 'boton secundario', for: 'foto-tag' }, 'Foto del precio'),
+      h('label', { class: 'boton', for: 'foto-tag' }, 'Foto del tag'),
+      h('label', { class: 'boton secundario', for: 'foto' }, 'Foto del producto'),
     ),
     inputFoto, inputTag,
-    h('p', { class: 'ayuda' }, 'El producto da el nombre y el tamaño; el tag del estante, el precio y la promoción.'),
+    h('p', { class: 'ayuda' }, 'Con la foto del tag basta: lee nombre, tamaño, precio y promoción. La del producto sirve si el tag no trae el nombre. Puedes tomarlas o elegirlas de tu galería.'),
     previa, estadoLectura, palabras,
     nombre.nodo, selectorTipo, notaTipo, tipoError, tamano.nodo, precio.nodo,
     h('label', { class: 'interruptor', for: 'tiene-descuento' }, tieneDesc, 'Tiene descuento'),
@@ -309,12 +325,25 @@ export async function pintarPrecio(raiz, ctx, params = []) {
       form.querySelector('[aria-invalid=true]')?.focus();
       return;
     }
+    // Producto nuevo: se reutiliza uno con el mismo nombre (sin mayúsculas, tildes ni espacios) o se crea.
+    let prod = producto;
+    if (esNuevo) {
+      const nom = productoNombre.input.value.trim().replace(/\s+/g, ' ') || vNombre;
+      const existente = e.productosLista.find((p) => normalizarNombre(p.nombre) === normalizarNombre(nom));
+      const otrosPrecios = existente ? (e.ofertasPorProducto.get(existente.id) ?? []).some((o) => o.mercadoId !== selMercado.value) : false;
+      if (existente?.tipoUnidad && otrosPrecios && existente.tipoUnidad !== vTamano.tipo) {
+        tamano.mostrarError(`«${existente.nombre}» ya existe y se mide en ${NOMBRE_TIPO[existente.tipoUnidad]}.`);
+        return;
+      }
+      guardando = true;
+      prod = existente ?? await repo.guardarProducto({ nombre: nom, tipoUnidad: vTamano.tipo });
+    }
     guardando = true;
-    if (vTamano.tipo !== producto.tipoUnidad) await repo.guardarProducto({ ...producto, tipoUnidad: vTamano.tipo });
-    const anterior = ofertas.find((x) => x.mercadoId === selMercado.value);
+    if (vTamano.tipo !== prod.tipoUnidad) await repo.guardarProducto({ ...prod, tipoUnidad: vTamano.tipo });
+    const anterior = (e.ofertasPorProducto.get(prod.id) ?? []).find((x) => x.mercadoId === selMercado.value);
     const fotoId = foto ? await repo.guardarFoto(foto) : anterior?.fotoId;
     await repo.guardarOferta({
-      productoId: producto.id,
+      productoId: prod.id,
       mercadoId: selMercado.value,
       nombreReal: vNombre,
       tamano: vTamano.tamano,

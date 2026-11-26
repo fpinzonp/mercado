@@ -44,3 +44,22 @@ test('normalizarTag limpia lo que llega de Gemini', () => {
     .toMatchObject({ precioNormal: 12900, precioDescuento: 9990, detalle: '-23%', hasta: '2026-11-30', tamano: 1000, unidad: 'ml' });
   expect(normalizarTag(null, hoy)).toMatchObject({ precioNormal: null });
 });
+
+test('el tag trae el nombre: se toma de la primera línea con texto, sin el tamaño', () => {
+  const r = interpretarTag('ARROZ DIANA PREMIUM 1000 g\n$4.500\nPrecio por gramo $4,50', hoy);
+  expect(r).toMatchObject({ nombre: 'Arroz Diana Premium', precioNormal: 4500, tamano: 1000, unidad: 'g' });
+});
+
+test('el nombre ignora líneas de precio, promoción y vigencia', () => {
+  const r = interpretarTag('Antes $12.900\nACEITE GIRASOL PREMIER 900 ml\nAhora $9.990\nVálido hasta 30/11/2026', hoy);
+  expect(r.nombre).toBe('Aceite Girasol Premier');
+});
+
+test('tag sin nombre deja nombre null', () => {
+  expect(interpretarTag('$4.500\nPrecio por gramo $4,50', hoy).nombre).toBeNull();
+});
+
+test('normalizarTag conserva el nombre que lee Gemini', () => {
+  expect(normalizarTag({ nombre: '  Arroz Diana ', precioNormal: 4500 }, hoy).nombre).toBe('Arroz Diana');
+  expect(normalizarTag({ precioNormal: 4500 }, hoy).nombre).toBeNull();
+});
